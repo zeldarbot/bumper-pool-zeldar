@@ -122,13 +122,15 @@ const BUMPERS = [
   { x: CX + ARM_OUTER, y: CY },
 ];
 
-let balls, curP, over, phase, brk, sel, aim, firing, sunk, af;
+let balls, curP, over, phase, brk, breakShooting, sel, aim, firing, sunk, af;
+let breakShots = { justin: null, morpheus: null }; // stored {ball, vx, vy}
 
 function mk(x,y,col,pl,m) { return {x,y,vx:0,vy:0,col,pl,m,out:false}; }
 
 function initGame() {
   document.getElementById('ov').classList.remove('show');
-  over=false; phase='break'; brk={justin:true,morpheus:true};
+  over=false; phase='break'; brk={justin:false,morpheus:false}; // tracks who HAS shot
+  breakShooting=false; // true while break shots are in motion
   curP='justin'; sel=null; aim=null; firing=false; sunk=false;
 
   // Balls near OWN pocket end. Marked ball in front of own pocket.
@@ -136,25 +138,24 @@ function initGame() {
   // "near each edge of the table by a pocket" — balls line up near the pocket they're closest to
   // but they SINK at the OPPOSITE pocket.
 
-  // Balls near OWN pocket. Marked ball directly in front.
-  // Push further from rail so they don't clip.
-  const jY = IB - 50;
-  const mY = IT + 50;
+  // Official setup: Marked ball directly in front of pocket.
+  // 4 remaining balls: 2 on each side of the pocket bumpers, in a half-moon arc.
+  // Flanking bumpers are at x = CX±42, so balls go just outside those bumpers.
 
   balls = [
-    // Justin (red) — near bottom
-    mk(CX, IB - 32, '#dd3333', 'justin', true),     // marked, directly in front of pocket
-    mk(CX-30, jY, '#cc2222', 'justin', false),
-    mk(CX+30, jY, '#cc2222', 'justin', false),
-    mk(CX-60, jY+10, '#cc2222', 'justin', false),
-    mk(CX+60, jY+10, '#cc2222', 'justin', false),
+    // Justin (red) — near BOTTOM pocket (Morpheus's target)
+    mk(CX, IB - 32, '#dd3333', 'justin', true),     // marked, directly in front
+    mk(CX - 52, IB - 28, '#cc2222', 'justin', false), // left of left bumper
+    mk(CX - 78, IB - 40, '#cc2222', 'justin', false), // far left
+    mk(CX + 52, IB - 28, '#cc2222', 'justin', false), // right of right bumper
+    mk(CX + 78, IB - 40, '#cc2222', 'justin', false), // far right
 
-    // Morpheus (white) — near top
-    mk(CX, IT + 32, '#dddddd', 'morpheus', true),   // marked, directly in front of pocket
-    mk(CX-30, mY, '#cccccc', 'morpheus', false),
-    mk(CX+30, mY, '#cccccc', 'morpheus', false),
-    mk(CX-60, mY-10, '#cccccc', 'morpheus', false),
-    mk(CX+60, mY-10, '#cccccc', 'morpheus', false),
+    // Morpheus (white) — near TOP pocket (Justin's target)
+    mk(CX, IT + 32, '#dddddd', 'morpheus', true),
+    mk(CX - 52, IT + 28, '#cccccc', 'morpheus', false),
+    mk(CX - 78, IT + 40, '#cccccc', 'morpheus', false),
+    mk(CX + 52, IT + 28, '#cccccc', 'morpheus', false),
+    mk(CX + 78, IT + 40, '#cccccc', 'morpheus', false),
   ];
 
   hud();
@@ -171,9 +172,19 @@ function hud() {
   const ti = document.getElementById('ti');
   const pm = document.getElementById('pm');
   if(phase==='break') {
-    const a = activeP();
-    ti.textContent = a==='justin' ? "Justin breaks 🔴" : "Morpheus breaks ⚪";
-    pm.textContent = 'Shoot marked ball to opposite pocket';
+    if(breakShooting) {
+      ti.textContent = 'BREAK!';
+      pm.textContent = '';
+    } else if(!brk.justin && !brk.morpheus) {
+      ti.textContent = 'SIMULTANEOUS BREAK';
+      pm.textContent = 'Justin: aim your red marked ball';
+    } else if(brk.justin && !brk.morpheus) {
+      ti.textContent = 'SIMULTANEOUS BREAK';
+      pm.textContent = 'Morpheus: aim your white marked ball';
+    } else {
+      ti.textContent = 'BREAK!';
+      pm.textContent = 'Launching...';
+    }
   } else {
     ti.textContent = curP==='justin' ? "Justin's turn 🔴" : "Morpheus's turn ⚪";
     const mb = balls.find(b=>b.pl===curP&&b.m);
@@ -183,8 +194,10 @@ function hud() {
 
 function activeP() {
   if(phase==='break') {
-    if(brk.justin) return 'justin';
-    if(brk.morpheus) return 'morpheus';
+    // During break, whichever player hasn't aimed yet can aim
+    if(!brk.justin) return 'justin';
+    if(!brk.morpheus) return 'morpheus';
+    return null; // both have aimed, waiting for launch
   }
   return curP;
 }
@@ -194,8 +207,22 @@ function moving() { return balls.some(b=>!b.out&&(Math.abs(b.vx)>0.04||Math.abs(
 function stopped() {
   chkWin(); if(over) return;
   if(phase==='break') {
-    if(brk.morpheus) { hud(); return; }
-    phase='play'; curP='justin';
+    // Break is done — both balls have stopped
+    breakShooting = false;
+    phase = 'play';
+    // Determine who goes first: whoever pocketed or is closest to their target pocket
+    const jm = balls.find(b=>b.pl==='justin'&&b.m);
+    const mm = balls.find(b=>b.pl==='morpheus'&&b.m);
+    if(jm.out && !mm.out) curP = 'justin';
+    else if(mm.out && !jm.out) curP = 'morpheus';
+    else {
+      // Neither or both sunk — compare distance to target pocket
+      const jTarget = POCKETS.find(p=>p.forPlayer==='justin');
+      const mTarget = POCKETS.find(p=>p.forPlayer==='morpheus');
+      const jDist = jm.out ? 0 : Math.hypot(jm.x-jTarget.x, jm.y-jTarget.y);
+      const mDist = mm.out ? 0 : Math.hypot(mm.x-mTarget.x, mm.y-mTarget.y);
+      curP = jDist <= mDist ? 'justin' : 'morpheus';
+    }
   } else {
     if(!sunk) curP = curP==='justin'?'morpheus':'justin';
   }
@@ -430,7 +457,18 @@ function gp(e) {
 function onD(e) {
   e.preventDefault();
   if(over||moving()||firing) return;
-  const p=gp(e), a=activeP();
+  const p=gp(e);
+  if(phase==='break') {
+    // During break, let the next un-aimed player pick their marked ball
+    const a = activeP();
+    if(!a) return; // both aimed, waiting
+    const mb = balls.find(b=>b.pl===a&&b.m);
+    if(mb && !mb.out && Math.hypot(p.x-mb.x,p.y-mb.y)<BR+14) {
+      sel=mb; aim=p;
+    }
+    return;
+  }
+  const a=activeP();
   for(let b of balls) {
     if(b.out||b.pl!==a) continue;
     if(Math.hypot(p.x-b.x,p.y-b.y)<BR+14) {
@@ -447,9 +485,27 @@ function onU(e) {
   const dx=sel.x-aim.x,dy=sel.y-aim.y,len=Math.hypot(dx,dy);
   if(len>10) {
     const pwr=Math.min(len/15,1)*16;
+    if(phase==='break') {
+      // Store shot, don't fire yet
+      const pl = sel.pl;
+      breakShots[pl] = { ball: sel, vx: (dx/len)*pwr, vy: (dy/len)*pwr };
+      brk[pl] = true; // mark as aimed
+      sel=null; aim=null;
+      hud();
+      // If both have aimed, fire simultaneously
+      if(brk.justin && brk.morpheus) {
+        breakShots.justin.ball.vx = breakShots.justin.vx;
+        breakShots.justin.ball.vy = breakShots.justin.vy;
+        breakShots.morpheus.ball.vx = breakShots.morpheus.vx;
+        breakShots.morpheus.ball.vy = breakShots.morpheus.vy;
+        breakShooting = true;
+        firing = true; sunk = false;
+        hud();
+      }
+      return;
+    }
     sel.vx=(dx/len)*pwr; sel.vy=(dy/len)*pwr;
     firing=true; sunk=false;
-    if(phase==='break') brk[activeP()]=false;
   }
   sel=null; aim=null;
 }
