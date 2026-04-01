@@ -138,19 +138,19 @@ function initGame() {
   const tpY = IT;   // top pocket y
 
   balls = [
-    // Justin (red) near bottom — vertical line
-    mk(CX, bpY - 24, '#dd3333', 'justin', true),     // marked, right in front of pocket
-    mk(CX - 44, bpY - 16, '#cc2222', 'justin', false), // left inner
-    mk(CX - 44, bpY - 42, '#cc2222', 'justin', false), // left outer
-    mk(CX + 44, bpY - 16, '#cc2222', 'justin', false), // right inner
-    mk(CX + 44, bpY - 42, '#cc2222', 'justin', false), // right outer
+    // Justin (red) near bottom — vertical columns, well clear of bumpers
+    mk(CX, bpY - 30, '#dd3333', 'justin', true),      // marked, in front of pocket
+    mk(CX - 60, bpY - 24, '#cc2222', 'justin', false), // left inner
+    mk(CX - 60, bpY - 54, '#cc2222', 'justin', false), // left outer
+    mk(CX + 60, bpY - 24, '#cc2222', 'justin', false), // right inner
+    mk(CX + 60, bpY - 54, '#cc2222', 'justin', false), // right outer
 
-    // Morpheus (white) near top — vertical line (mirrored)
-    mk(CX, tpY + 24, '#dddddd', 'morpheus', true),
-    mk(CX - 44, tpY + 16, '#cccccc', 'morpheus', false),
-    mk(CX - 44, tpY + 42, '#cccccc', 'morpheus', false),
-    mk(CX + 44, tpY + 16, '#cccccc', 'morpheus', false),
-    mk(CX + 44, tpY + 42, '#cccccc', 'morpheus', false),
+    // Morpheus (white) near top — mirrored
+    mk(CX, tpY + 30, '#dddddd', 'morpheus', true),
+    mk(CX - 60, tpY + 24, '#cccccc', 'morpheus', false),
+    mk(CX - 60, tpY + 54, '#cccccc', 'morpheus', false),
+    mk(CX + 60, tpY + 24, '#cccccc', 'morpheus', false),
+    mk(CX + 60, tpY + 54, '#cccccc', 'morpheus', false),
   ];
 
   hud();
