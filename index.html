@@ -102,12 +102,12 @@ const ARM_INNER = G/2 + BPR + 2;
 const ARM_OUTER = ARM_INNER + BPR*2 + 12;
 
 const BUMPERS = [
-  // Flanking TOP pocket — one on each side, set INSIDE the playing area
-  { x: CX - 30, y: IT + BPR + 6 },
-  { x: CX + 30, y: IT + BPR + 6 },
+  // Flanking TOP pocket — one on each side, spread wider
+  { x: CX - 42, y: IT + 20 },
+  { x: CX + 42, y: IT + 20 },
   // Flanking BOTTOM pocket
-  { x: CX - 30, y: IB - BPR - 6 },
-  { x: CX + 30, y: IB - BPR - 6 },
+  { x: CX - 42, y: IB - 20 },
+  { x: CX + 42, y: IB - 20 },
 
   // Center cross — vertical arm
   { x: CX, y: CY - ARM_OUTER },
@@ -136,23 +136,25 @@ function initGame() {
   // "near each edge of the table by a pocket" — balls line up near the pocket they're closest to
   // but they SINK at the OPPOSITE pocket.
 
-  const jY = IB - 30;  // Justin's starting area (near bottom pocket = Morpheus's target)
-  const mY = IT + 30;  // Morpheus's starting area (near top pocket = Justin's target)
+  // Balls near OWN pocket. Marked ball directly in front.
+  // Push further from rail so they don't clip.
+  const jY = IB - 50;
+  const mY = IT + 50;
 
   balls = [
-    // Justin (red) — near bottom. Marked ball in front of bottom pocket.
-    mk(CX, jY, '#dd3333', 'justin', true),         // marked, directly in front
-    mk(CX-25, jY-8, '#cc2222', 'justin', false),
-    mk(CX+25, jY-8, '#cc2222', 'justin', false),
-    mk(CX-50, jY-20, '#cc2222', 'justin', false),
-    mk(CX+50, jY-20, '#cc2222', 'justin', false),
+    // Justin (red) — near bottom
+    mk(CX, IB - 32, '#dd3333', 'justin', true),     // marked, directly in front of pocket
+    mk(CX-30, jY, '#cc2222', 'justin', false),
+    mk(CX+30, jY, '#cc2222', 'justin', false),
+    mk(CX-60, jY+10, '#cc2222', 'justin', false),
+    mk(CX+60, jY+10, '#cc2222', 'justin', false),
 
-    // Morpheus (white) — near top. Marked ball in front of top pocket.
-    mk(CX, mY, '#dddddd', 'morpheus', true),
-    mk(CX-25, mY+8, '#cccccc', 'morpheus', false),
-    mk(CX+25, mY+8, '#cccccc', 'morpheus', false),
-    mk(CX-50, mY+20, '#cccccc', 'morpheus', false),
-    mk(CX+50, mY+20, '#cccccc', 'morpheus', false),
+    // Morpheus (white) — near top
+    mk(CX, IT + 32, '#dddddd', 'morpheus', true),   // marked, directly in front of pocket
+    mk(CX-30, mY, '#cccccc', 'morpheus', false),
+    mk(CX+30, mY, '#cccccc', 'morpheus', false),
+    mk(CX-60, mY-10, '#cccccc', 'morpheus', false),
+    mk(CX+60, mY-10, '#cccccc', 'morpheus', false),
   ];
 
   hud();
@@ -394,14 +396,12 @@ function draw() {
     }
   }
 
-  // Labels on the side rails
+  // Labels on the felt, away from balls
   X.save();
-  X.fillStyle='rgba(255,255,255,0.25)';
-  X.font='bold 10px Georgia'; X.textAlign='center';
-  // Top pocket label
-  X.fillText('↑ JUSTIN SINKS HERE', CX, IT+PR+22);
-  // Bottom pocket label
-  X.fillText('↓ MORPHEUS SINKS HERE', CX, IB-PR-14);
+  X.fillStyle='rgba(255,255,255,0.18)';
+  X.font='bold 9px Georgia'; X.textAlign='center';
+  X.fillText('JUSTIN →', CX, IT + 52);
+  X.fillText('← MORPHEUS', CX, IB - 44);
   X.restore();
 }
 
