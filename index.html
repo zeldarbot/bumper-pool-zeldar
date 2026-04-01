@@ -138,24 +138,28 @@ function initGame() {
   // "near each edge of the table by a pocket" — balls line up near the pocket they're closest to
   // but they SINK at the OPPOSITE pocket.
 
-  // Official setup: Marked ball directly in front of pocket.
-  // 4 remaining balls: 2 on each side of the pocket bumpers, in a half-moon arc.
-  // Flanking bumpers are at x = CX±42, so balls go just outside those bumpers.
+  // Official setup: All 5 balls in a straight horizontal line near your pocket.
+  // Marked ball centered directly in front of pocket (between the 2 flanking bumpers).
+  // Other 4 balls: 2 on each side, OUTSIDE the flanking bumpers, evenly spaced in a line.
+  // Flanking bumpers at x = CX±42. Balls sit at the same y-level as the bumpers.
+
+  const jLineY = IB - 20;  // Justin's ball line (same level as bottom flanking bumpers)
+  const mLineY = IT + 20;  // Morpheus's ball line
 
   balls = [
-    // Justin (red) — near BOTTOM pocket (Morpheus's target)
-    mk(CX, IB - 32, '#dd3333', 'justin', true),     // marked, directly in front
-    mk(CX - 52, IB - 28, '#cc2222', 'justin', false), // left of left bumper
-    mk(CX - 78, IB - 40, '#cc2222', 'justin', false), // far left
-    mk(CX + 52, IB - 28, '#cc2222', 'justin', false), // right of right bumper
-    mk(CX + 78, IB - 40, '#cc2222', 'justin', false), // far right
+    // Justin (red) — bottom side, horizontal line
+    mk(CX,       jLineY, '#dd3333', 'justin', true),    // marked, center
+    mk(CX - 62,  jLineY, '#cc2222', 'justin', false),   // just outside left bumper
+    mk(CX - 92,  jLineY, '#cc2222', 'justin', false),   // far left
+    mk(CX + 62,  jLineY, '#cc2222', 'justin', false),   // just outside right bumper
+    mk(CX + 92,  jLineY, '#cc2222', 'justin', false),   // far right
 
-    // Morpheus (white) — near TOP pocket (Justin's target)
-    mk(CX, IT + 32, '#dddddd', 'morpheus', true),
-    mk(CX - 52, IT + 28, '#cccccc', 'morpheus', false),
-    mk(CX - 78, IT + 40, '#cccccc', 'morpheus', false),
-    mk(CX + 52, IT + 28, '#cccccc', 'morpheus', false),
-    mk(CX + 78, IT + 40, '#cccccc', 'morpheus', false),
+    // Morpheus (white) — top side, horizontal line
+    mk(CX,       mLineY, '#dddddd', 'morpheus', true),
+    mk(CX - 62,  mLineY, '#cccccc', 'morpheus', false),
+    mk(CX - 92,  mLineY, '#cccccc', 'morpheus', false),
+    mk(CX + 62,  mLineY, '#cccccc', 'morpheus', false),
+    mk(CX + 92,  mLineY, '#cccccc', 'morpheus', false),
   ];
 
   hud();
