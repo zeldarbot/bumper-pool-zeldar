@@ -130,10 +130,10 @@ const BUMPERS = [
 
 // Game state
 let balls, currentPlayer, gameOver, phase;
-// phase: 'break' = opening simultaneous shot, 'play' = normal alternating
-let breakPending; // both players need to shoot before break resolves
+let breakPending;
 let selectedBall, aimCurrent;
-let pocketedThisTurn, moving;
+let pocketedThisTurn;
+let shotInFlight = false;
 let animFrame;
 
 function makeBall(x, y, baseColor, markedColor, player, marked) {
@@ -458,7 +458,8 @@ function loop() {
   physics();
   draw();
   const isMoving = anyMoving();
-  if (wasMoving && !isMoving) {
+  if (wasMoving && !isMoving && shotInFlight) {
+    shotInFlight = false;
     onBallsStopped();
   }
   animFrame = requestAnimationFrame(loop);
@@ -472,7 +473,7 @@ function getPos(e) {
 }
 
 function canShoot() {
-  if (gameOver || anyMoving()) return false;
+  if (gameOver || anyMoving() || shotInFlight) return false;
   if (phase === 'break') {
     // Both need to shoot; whoever hasn't shot yet can shoot
     const active = getActivePlayer();
@@ -513,15 +514,14 @@ function onUp(e) {
     const power = Math.min(len/12, 1) * 20;
     selectedBall.vx = (dx/len) * power;
     selectedBall.vy = (dy/len) * power;
-    // Mark break shot as done
+    shotInFlight = true;
     if (phase === 'break') {
       const active = getActivePlayer();
       breakPending[active] = false;
-      // If both have now shot, switch to alternating after balls stop
     }
   }
+  selectedBall = null;
   aimCurrent = null;
-  if (Math.hypot(dx, dy) <= 8) selectedBall = null;
 }
 
 canvas.addEventListener('mousedown', onDown);
