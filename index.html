@@ -8,34 +8,34 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     background: #1a1a2e;
-    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-    min-height: 100vh; font-family: 'Georgia', serif; color: #f0e6d3; padding: 10px;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; font-family: 'Georgia', serif; color: #f0e6d3; padding: 8px;
     -webkit-user-select: none; user-select: none;
   }
-  h1 { font-size: 1.3em; letter-spacing: 2px; text-transform: uppercase; color: #c9a84c; margin-bottom: 6px; }
+  h1 { font-size: 1.2em; letter-spacing: 2px; text-transform: uppercase; color: #c9a84c; margin-bottom: 5px; }
   #scoreboard {
-    display: flex; gap: 20px; margin-bottom: 8px;
-    background: rgba(0,0,0,0.4); padding: 7px 18px; border-radius: 8px; border: 1px solid #c9a84c44;
-    align-items: center;
+    display: flex; gap: 16px; margin-bottom: 6px;
+    background: rgba(0,0,0,0.4); padding: 6px 16px; border-radius: 8px;
+    border: 1px solid #c9a84c44; align-items: center;
   }
-  .player-info { text-align: center; min-width: 90px; }
-  .player-name { font-size: 0.95em; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-  .player-name.red { color: #e05555; }
-  .player-name.wht { color: #ccc; }
-  .ball-dots { font-size: 1.1em; margin-top: 2px; letter-spacing: 1px; }
-  #turn-box { text-align: center; min-width: 120px; }
-  #turn-indicator { font-size: 0.85em; color: #c9a84c; }
-  #phase-msg { font-size: 0.72em; color: #999; margin-top: 2px; min-height: 14px; }
+  .pi { text-align: center; min-width: 80px; }
+  .pn { font-size: 0.9em; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+  .pn.red { color: #e05555; } .pn.wht { color: #ccc; }
+  .bd { font-size: 1em; margin-top: 1px; }
+  #tb { text-align: center; min-width: 110px; }
+  #ti { font-size: 0.82em; color: #c9a84c; }
+  #pm { font-size: 0.68em; color: #999; margin-top: 2px; min-height: 12px; }
   canvas { border-radius: 6px; cursor: crosshair; touch-action: none; max-width: 100%; }
-  #instructions { font-size: 0.7em; color: #555; margin-top: 6px; text-align: center; }
-  #overlay {
+  #ins { font-size: 0.68em; color: #555; margin-top: 5px; text-align: center; }
+  #ov {
     display: none; position: fixed; top:0;left:0;right:0;bottom:0;
-    background: rgba(0,0,0,0.85); flex-direction: column; align-items: center; justify-content: center; z-index: 10;
+    background: rgba(0,0,0,0.88); flex-direction: column; align-items: center;
+    justify-content: center; z-index: 10;
   }
-  #overlay.show { display: flex; }
-  #winner-text { font-size: 2.2em; color: #c9a84c; text-shadow: 0 0 20px rgba(201,168,76,0.8); margin-bottom: 20px; text-align: center; }
-  #replay-btn {
-    background: #c9a84c; color: #1a1a2e; border: none; padding: 12px 30px;
+  #ov.show { display: flex; }
+  #wt { font-size: 2em; color: #c9a84c; text-shadow: 0 0 20px rgba(201,168,76,0.8); margin-bottom: 16px; text-align: center; }
+  #rb {
+    background: #c9a84c; color: #1a1a2e; border: none; padding: 10px 28px;
     font-size: 1em; font-family: 'Georgia', serif; text-transform: uppercase;
     letter-spacing: 2px; border-radius: 4px; cursor: pointer; font-weight: bold;
   }
@@ -44,463 +44,422 @@
 <body>
 <h1>⚫ Bumper Pool ⚫</h1>
 <div id="scoreboard">
-  <div class="player-info">
-    <div class="player-name red">Justin 🔴</div>
-    <div class="ball-dots" id="justin-dots">●●●●●</div>
-  </div>
-  <div id="turn-box">
-    <div id="turn-indicator">—</div>
-    <div id="phase-msg"></div>
-  </div>
-  <div class="player-info">
-    <div class="player-name wht">Morpheus ⚪</div>
-    <div class="ball-dots" id="morpheus-dots">●●●●●</div>
-  </div>
+  <div class="pi"><div class="pn red">Justin 🔴</div><div class="bd" id="jd">●●●●●</div></div>
+  <div id="tb"><div id="ti">—</div><div id="pm"></div></div>
+  <div class="pi"><div class="pn wht">Morpheus ⚪</div><div class="bd" id="md">●●●●●</div></div>
 </div>
 <canvas id="c"></canvas>
-<div id="instructions">Tap ball · Drag away to aim · Release to shoot</div>
-<div id="overlay">
-  <div id="winner-text"></div>
-  <button id="replay-btn" onclick="initGame()">Play Again</button>
-</div>
+<div id="ins">Tap your ball · Drag away to aim · Release to shoot</div>
+<div id="ov"><div id="wt"></div><button id="rb" onclick="initGame()">Play Again</button></div>
 
 <script>
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+const C = document.getElementById('c');
+const X = C.getContext('2d');
 
-// Table: rectangular, portrait orientation
-// Pockets centered on the SHORT edges (top and bottom center)
-// Wikipedia: "two pockets, placed opposite one another, located at the center of two of the rails"
-// For a portrait phone layout: pockets at top-center and bottom-center
-const BASE_W = 420, BASE_H = 640;
-let scale = 1;
-const RAIL = 28;
-const IL = RAIL, IR = BASE_W - RAIL, IT = RAIL, IB = BASE_H - RAIL;
-const CX = BASE_W / 2, CY = BASE_H / 2;
-const FW = IR - IL, FH = IB - IT; // felt dimensions
-const BALL_R = 10, BUMPER_R = 12, POCKET_R = 14;
+// Table dimensions (logical coords)
+const W = 440, H = 680;
+const RAIL = 30;
+const IL = RAIL, IR = W-RAIL, IT = RAIL, IB = H-RAIL;
+const CX = W/2, CY = H/2;
+const BR = 10;   // ball radius
+const BPR = 13;  // bumper radius
+const PR = 15;   // pocket radius (visual)
+const PSINK = 18; // pocket sink zone
 
+let sc = 1;
 function resize() {
-  const maxW = Math.min(window.innerWidth - 16, BASE_W);
-  const maxH = window.innerHeight - 160;
-  scale = Math.min(maxW / BASE_W, maxH / BASE_H);
-  canvas.width = BASE_W * scale;
-  canvas.height = BASE_H * scale;
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  const mw = Math.min(window.innerWidth-12, W);
+  const mh = window.innerHeight-150;
+  sc = Math.min(mw/W, mh/H);
+  C.width = W*sc; C.height = H*sc;
+  X.setTransform(sc,0,0,sc,0,0);
 }
 resize();
 window.addEventListener('resize', () => { resize(); draw(); });
 
-// Pockets: one at top center, one at bottom center
-// Justin's pocket (where Justin sinks his balls) = BOTTOM
-// Morpheus's pocket = TOP
-// Balls start near your OWN pocket end → shoot to OPPOSITE pocket
+/*
+  LAYOUT (per Wikipedia / official rules):
+  - Rectangular table, pocket centered on each short rail (top & bottom center)
+  - 2 bumpers flank each pocket (one on each side)
+  - Center: 8 bumpers in a cross shape
+    - Vertical arm (aligned with pockets): 2 bumpers above center, 2 below
+    - Horizontal arm: 2 bumpers left of center, 2 right
+    - Gap in the exact center big enough for one ball to pass
+  - Red balls (Justin) start near bottom, white (Morpheus) near top
+  - Each player sinks into the pocket at the OPPOSITE end
+*/
+
+// Justin (red) starts BOTTOM, sinks at TOP pocket
+// Morpheus (white) starts TOP, sinks at BOTTOM pocket
 const POCKETS = [
-  { x: CX, y: IT,  forPlayer: 'morpheus' }, // top pocket — Morpheus sinks here
-  { x: CX, y: IB,  forPlayer: 'justin'  }, // bottom pocket — Justin sinks here
+  { x: CX, y: IT, forPlayer: 'justin' },    // top pocket — Justin sinks here
+  { x: CX, y: IB, forPlayer: 'morpheus' },   // bottom pocket — Morpheus sinks here
 ];
 
-// Bumpers: 2 flanking each pocket + 8 in a cross in the center
-// Cross is aligned with the pockets (vertical line through center)
-// Each arm of the cross has 2 bumpers, with a gap in the exact center
-const GAP = BALL_R * 2.5; // gap in center of cross for ball to pass through
-const ARM = 44; // distance from center to each bumper in an arm
+// Bumpers
+const G = BR*2.8; // gap size at center
+const ARM_INNER = G/2 + BPR + 2;
+const ARM_OUTER = ARM_INNER + BPR*2 + 12;
 
 const BUMPERS = [
-  // Flanking top pocket (Morpheus's pocket)
-  { x: CX - 28, y: IT + 3 },
-  { x: CX + 28, y: IT + 3 },
-  // Flanking bottom pocket (Justin's pocket)
-  { x: CX - 28, y: IB - 3 },
-  { x: CX + 28, y: IB - 3 },
+  // Flanking TOP pocket — one on each side, set INSIDE the playing area
+  { x: CX - 30, y: IT + BPR + 6 },
+  { x: CX + 30, y: IT + BPR + 6 },
+  // Flanking BOTTOM pocket
+  { x: CX - 30, y: IB - BPR - 6 },
+  { x: CX + 30, y: IB - BPR - 6 },
 
-  // Center cross — vertical arm (aligned with pockets)
-  { x: CX, y: CY - ARM - GAP/2 },      // top of vertical arm, outer
-  { x: CX, y: CY - GAP/2 - 4 },         // top of vertical arm, inner (near gap)
-  { x: CX, y: CY + GAP/2 + 4 },         // bottom of vertical arm, inner
-  { x: CX, y: CY + ARM + GAP/2 },       // bottom of vertical arm, outer
+  // Center cross — vertical arm
+  { x: CX, y: CY - ARM_OUTER },
+  { x: CX, y: CY - ARM_INNER },
+  { x: CX, y: CY + ARM_INNER },
+  { x: CX, y: CY + ARM_OUTER },
 
   // Center cross — horizontal arm
-  { x: CX - ARM - GAP/2, y: CY },       // left outer
-  { x: CX - GAP/2 - 4,   y: CY },       // left inner
-  { x: CX + GAP/2 + 4,   y: CY },       // right inner
-  { x: CX + ARM + GAP/2, y: CY },       // right outer
+  { x: CX - ARM_OUTER, y: CY },
+  { x: CX - ARM_INNER, y: CY },
+  { x: CX + ARM_INNER, y: CY },
+  { x: CX + ARM_OUTER, y: CY },
 ];
 
-let balls, currentPlayer, gameOver, phase, breakPending;
-let selectedBall, aimCurrent, shotInFlight, pocketedThisTurn, animFrame;
+let balls, curP, over, phase, brk, sel, aim, firing, sunk, af;
 
-function mkBall(x, y, color, player, marked) {
-  return { x, y, vx:0, vy:0, color, player, marked, pocketed: false };
-}
+function mk(x,y,col,pl,m) { return {x,y,vx:0,vy:0,col,pl,m,out:false}; }
 
 function initGame() {
-  document.getElementById('overlay').classList.remove('show');
-  gameOver = false;
-  phase = 'break';
-  breakPending = { justin: true, morpheus: true };
-  currentPlayer = 'justin';
-  selectedBall = null; aimCurrent = null;
-  shotInFlight = false; pocketedThisTurn = false;
+  document.getElementById('ov').classList.remove('show');
+  over=false; phase='break'; brk={justin:true,morpheus:true};
+  curP='justin'; sel=null; aim=null; firing=false; sunk=false;
 
-  // Justin = red, balls start near BOTTOM pocket (his own), shoots UP to top
-  // Morpheus = white, balls start near TOP pocket (his own), shoots DOWN to bottom
-  // Marked ball directly in front of own pocket
-  // Other 4 balls: 2 on each side of the pocket
+  // Balls near OWN pocket end. Marked ball in front of own pocket.
+  // Justin near bottom, Morpheus near top.
+  // "near each edge of the table by a pocket" — balls line up near the pocket they're closest to
+  // but they SINK at the OPPOSITE pocket.
 
-  const jPocketY = IB; // Justin's pocket at bottom
-  const mPocketY = IT; // Morpheus's pocket at top
+  const jY = IB - 30;  // Justin's starting area (near bottom pocket = Morpheus's target)
+  const mY = IT + 30;  // Morpheus's starting area (near top pocket = Justin's target)
 
   balls = [
-    // Justin's red balls near bottom
-    mkBall(CX,       jPocketY - 26, '#dd3333', 'justin', true),   // marked, in front of pocket
-    mkBall(CX - 30,  jPocketY - 22, '#cc2222', 'justin', false),
-    mkBall(CX + 30,  jPocketY - 22, '#cc2222', 'justin', false),
-    mkBall(CX - 56,  jPocketY - 40, '#cc2222', 'justin', false),
-    mkBall(CX + 56,  jPocketY - 40, '#cc2222', 'justin', false),
+    // Justin (red) — near bottom. Marked ball in front of bottom pocket.
+    mk(CX, jY, '#dd3333', 'justin', true),         // marked, directly in front
+    mk(CX-25, jY-8, '#cc2222', 'justin', false),
+    mk(CX+25, jY-8, '#cc2222', 'justin', false),
+    mk(CX-50, jY-20, '#cc2222', 'justin', false),
+    mk(CX+50, jY-20, '#cc2222', 'justin', false),
 
-    // Morpheus's white balls near top
-    mkBall(CX,       mPocketY + 26, '#dddddd', 'morpheus', true),  // marked, in front of pocket
-    mkBall(CX - 30,  mPocketY + 22, '#cccccc', 'morpheus', false),
-    mkBall(CX + 30,  mPocketY + 22, '#cccccc', 'morpheus', false),
-    mkBall(CX - 56,  mPocketY + 40, '#cccccc', 'morpheus', false),
-    mkBall(CX + 56,  mPocketY + 40, '#cccccc', 'morpheus', false),
+    // Morpheus (white) — near top. Marked ball in front of top pocket.
+    mk(CX, mY, '#dddddd', 'morpheus', true),
+    mk(CX-25, mY+8, '#cccccc', 'morpheus', false),
+    mk(CX+25, mY+8, '#cccccc', 'morpheus', false),
+    mk(CX-50, mY+20, '#cccccc', 'morpheus', false),
+    mk(CX+50, mY+20, '#cccccc', 'morpheus', false),
   ];
 
-  updateHUD();
-  if (animFrame) cancelAnimationFrame(animFrame);
+  hud();
+  if(af) cancelAnimationFrame(af);
   loop();
 }
 
-function updateHUD() {
-  const jLeft = balls.filter(b => b.player === 'justin' && !b.pocketed).length;
-  const mLeft = balls.filter(b => b.player === 'morpheus' && !b.pocketed).length;
-  document.getElementById('justin-dots').innerHTML =
-    '<span style="color:#e05555">' + '●'.repeat(jLeft) + '</span><span style="color:#442">' + '○'.repeat(5-jLeft) + '</span>';
-  document.getElementById('morpheus-dots').innerHTML =
-    '<span style="color:#ccc">' + '●'.repeat(mLeft) + '</span><span style="color:#442">' + '○'.repeat(5-mLeft) + '</span>';
-  if (gameOver) return;
-
-  const turnEl = document.getElementById('turn-indicator');
-  const phaseEl = document.getElementById('phase-msg');
-
-  if (phase === 'break') {
-    const active = getActivePlayer();
-    turnEl.textContent = active === 'justin' ? "Justin breaks 🔴" : "Morpheus breaks ⚪";
-    phaseEl.textContent = 'Bank off side rail → opposite pocket';
+function hud() {
+  const jl = balls.filter(b=>b.pl==='justin'&&!b.out).length;
+  const ml = balls.filter(b=>b.pl==='morpheus'&&!b.out).length;
+  document.getElementById('jd').innerHTML = `<span style="color:#e05555">${'●'.repeat(jl)}</span><span style="color:#333">${'○'.repeat(5-jl)}</span>`;
+  document.getElementById('md').innerHTML = `<span style="color:#ccc">${'●'.repeat(ml)}</span><span style="color:#333">${'○'.repeat(5-ml)}</span>`;
+  if(over) return;
+  const ti = document.getElementById('ti');
+  const pm = document.getElementById('pm');
+  if(phase==='break') {
+    const a = activeP();
+    ti.textContent = a==='justin' ? "Justin breaks 🔴" : "Morpheus breaks ⚪";
+    pm.textContent = 'Shoot marked ball to opposite pocket';
   } else {
-    turnEl.textContent = currentPlayer === 'justin' ? "Justin's turn 🔴" : "Morpheus's turn ⚪";
-    const p = currentPlayer;
-    const marked = balls.find(b => b.player === p && b.marked);
-    phaseEl.textContent = (marked && !marked.pocketed) ? 'Must pocket marked ball first' : '';
+    ti.textContent = curP==='justin' ? "Justin's turn 🔴" : "Morpheus's turn ⚪";
+    const mb = balls.find(b=>b.pl===curP&&b.m);
+    pm.textContent = (mb&&!mb.out) ? 'Must pocket marked ball first' : '';
   }
 }
 
-function getActivePlayer() {
-  if (phase === 'break') {
-    if (breakPending.justin) return 'justin';
-    if (breakPending.morpheus) return 'morpheus';
-    return 'justin';
+function activeP() {
+  if(phase==='break') {
+    if(brk.justin) return 'justin';
+    if(brk.morpheus) return 'morpheus';
   }
-  return currentPlayer;
+  return curP;
 }
 
-function anyMoving() {
-  return balls.some(b => !b.pocketed && (Math.abs(b.vx) > 0.05 || Math.abs(b.vy) > 0.05));
-}
+function moving() { return balls.some(b=>!b.out&&(Math.abs(b.vx)>0.04||Math.abs(b.vy)>0.04)); }
 
-function onBallsStopped() {
-  checkWin();
-  if (gameOver) return;
-
-  if (phase === 'break') {
-    if (breakPending.morpheus) {
-      // Morpheus still needs to shoot
-      updateHUD();
-      return;
-    }
-    // Both have shot — switch to normal play
-    phase = 'play';
-    currentPlayer = 'justin'; // Justin goes first after break
+function stopped() {
+  chkWin(); if(over) return;
+  if(phase==='break') {
+    if(brk.morpheus) { hud(); return; }
+    phase='play'; curP='justin';
   } else {
-    if (!pocketedThisTurn) {
-      currentPlayer = currentPlayer === 'justin' ? 'morpheus' : 'justin';
-    }
+    if(!sunk) curP = curP==='justin'?'morpheus':'justin';
   }
-  pocketedThisTurn = false;
-  selectedBall = null;
-  aimCurrent = null;
-  updateHUD();
+  sunk=false; sel=null; aim=null; hud();
 }
 
-function checkWin() {
-  const jDone = balls.filter(b => b.player === 'justin' && !b.pocketed).length === 0;
-  const mDone = balls.filter(b => b.player === 'morpheus' && !b.pocketed).length === 0;
-  if (jDone || mDone) {
-    gameOver = true;
-    document.getElementById('winner-text').textContent = jDone ? 'JUSTIN WINS! 🔴' : 'MORPHEUS WINS! ⚪';
-    document.getElementById('overlay').classList.add('show');
-    updateHUD();
+function chkWin() {
+  const jd = balls.filter(b=>b.pl==='justin'&&!b.out).length===0;
+  const md = balls.filter(b=>b.pl==='morpheus'&&!b.out).length===0;
+  if(jd||md) {
+    over=true;
+    document.getElementById('wt').textContent = jd ? 'JUSTIN WINS! 🔴' : 'MORPHEUS WINS! ⚪';
+    document.getElementById('ov').classList.add('show');
+    hud();
   }
 }
 
-function physics() {
-  if (!anyMoving()) return;
-  const FRIC = 0.984;
-  for (let b of balls) {
-    if (b.pocketed) continue;
+function phys() {
+  if(!moving()) return;
+  const F = 0.985;
+  for(let b of balls) {
+    if(b.out) continue;
     b.x += b.vx; b.y += b.vy;
-    b.vx *= FRIC; b.vy *= FRIC;
-    if (Math.abs(b.vx) < 0.05) b.vx = 0;
-    if (Math.abs(b.vy) < 0.05) b.vy = 0;
+    b.vx *= F; b.vy *= F;
+    if(Math.abs(b.vx)<0.04) b.vx=0;
+    if(Math.abs(b.vy)<0.04) b.vy=0;
 
-    // Walls
-    if (b.x - BALL_R < IL) { b.x = IL + BALL_R; b.vx = Math.abs(b.vx) * 0.8; }
-    if (b.x + BALL_R > IR) { b.x = IR - BALL_R; b.vx = -Math.abs(b.vx) * 0.8; }
-    if (b.y - BALL_R < IT) { b.y = IT + BALL_R; b.vy = Math.abs(b.vy) * 0.8; }
-    if (b.y + BALL_R > IB) { b.y = IB - BALL_R; b.vy = -Math.abs(b.vy) * 0.8; }
+    // Walls — but leave gap for pockets
+    // Top wall: gap at pocket
+    if(b.y - BR < IT) {
+      if(Math.abs(b.x - CX) > PR+4) { // not near pocket
+        b.y = IT+BR; b.vy = Math.abs(b.vy)*0.82;
+      }
+    }
+    // Bottom wall: gap at pocket
+    if(b.y + BR > IB) {
+      if(Math.abs(b.x - CX) > PR+4) {
+        b.y = IB-BR; b.vy = -Math.abs(b.vy)*0.82;
+      }
+    }
+    // Side walls (no pockets on sides)
+    if(b.x - BR < IL) { b.x = IL+BR; b.vx = Math.abs(b.vx)*0.82; }
+    if(b.x + BR > IR) { b.x = IR-BR; b.vx = -Math.abs(b.vx)*0.82; }
 
     // Bumpers
-    for (let bmp of BUMPERS) {
-      const dx = b.x - bmp.x, dy = b.y - bmp.y;
-      const dist = Math.hypot(dx, dy);
-      const min = BALL_R + BUMPER_R;
-      if (dist < min && dist > 0.01) {
-        const nx = dx/dist, ny = dy/dist;
-        const dot = b.vx*nx + b.vy*ny;
-        if (dot < 0) {
-          b.vx -= 2.1 * dot * nx;
-          b.vy -= 2.1 * dot * ny;
-        }
-        b.x = bmp.x + nx * (min + 0.5);
-        b.y = bmp.y + ny * (min + 0.5);
+    for(let bp of BUMPERS) {
+      const dx=b.x-bp.x, dy=b.y-bp.y;
+      const d = Math.hypot(dx,dy);
+      const mn = BR+BPR;
+      if(d<mn && d>0.01) {
+        const nx=dx/d, ny=dy/d;
+        const dot = b.vx*nx+b.vy*ny;
+        if(dot<0) { b.vx -= 2.05*dot*nx; b.vy -= 2.05*dot*ny; }
+        b.x = bp.x+nx*(mn+0.5); b.y = bp.y+ny*(mn+0.5);
       }
     }
 
     // Pockets
-    for (let p of POCKETS) {
-      if (Math.hypot(b.x - p.x, b.y - p.y) < POCKET_R + BALL_R * 0.3) {
-        if (p.forPlayer === b.player) {
-          // Correct pocket — check marked-first rule
-          const marked = balls.find(m => m.player === b.player && m.marked);
-          if (marked && !marked.pocketed && b !== marked) {
-            // Can't pocket non-marked first — penalty: opponent drops 2
-            // For simplicity: just bounce it out
-            bounceOut(b, p);
+    for(let p of POCKETS) {
+      if(Math.hypot(b.x-p.x, b.y-p.y) < PSINK) {
+        if(p.forPlayer === b.pl) {
+          // Correct pocket
+          const mb = balls.find(mm=>mm.pl===b.pl&&mm.m);
+          if(mb && !mb.out && b!==mb) {
+            // Non-marked before marked — bounce out (penalty)
+            bounce(b,p);
           } else {
-            b.pocketed = true; b.vx = 0; b.vy = 0;
-            pocketedThisTurn = true;
+            b.out=true; b.vx=0; b.vy=0; sunk=true;
           }
         } else {
           // Wrong pocket — bounce out
-          bounceOut(b, p);
+          bounce(b,p);
         }
       }
     }
   }
 
-  // Ball-ball collisions
-  for (let i = 0; i < balls.length; i++) {
-    for (let j = i+1; j < balls.length; j++) {
-      const a = balls[i], bb = balls[j];
-      if (a.pocketed || bb.pocketed) continue;
-      const dx = bb.x-a.x, dy = bb.y-a.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < BALL_R*2 && dist > 0.01) {
-        const nx = dx/dist, ny = dy/dist;
-        const imp = (a.vx-bb.vx)*nx + (a.vy-bb.vy)*ny;
-        if (imp > 0) {
-          a.vx -= imp*nx; a.vy -= imp*ny;
-          bb.vx += imp*nx; bb.vy += imp*ny;
-        }
-        const ov = BALL_R*2 - dist;
-        a.x -= nx*ov/2; a.y -= ny*ov/2;
-        bb.x += nx*ov/2; bb.y += ny*ov/2;
+  // Ball-ball
+  for(let i=0;i<balls.length;i++) {
+    for(let j=i+1;j<balls.length;j++) {
+      const a=balls[i],b=balls[j];
+      if(a.out||b.out) continue;
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const d=Math.hypot(dx,dy);
+      if(d<BR*2 && d>0.01) {
+        const nx=dx/d,ny=dy/d;
+        const imp=(a.vx-b.vx)*nx+(a.vy-b.vy)*ny;
+        if(imp>0) { a.vx-=imp*nx; a.vy-=imp*ny; b.vx+=imp*nx; b.vy+=imp*ny; }
+        const ov=BR*2-d;
+        a.x-=nx*ov/2; a.y-=ny*ov/2; b.x+=nx*ov/2; b.y+=ny*ov/2;
       }
     }
+  }
+
+  // Keep in bounds (safety)
+  for(let b of balls) {
+    if(b.out) continue;
+    b.x = Math.max(IL+BR, Math.min(IR-BR, b.x));
+    b.y = Math.max(IT+BR, Math.min(IB-BR, b.y));
   }
 }
 
-function bounceOut(b, p) {
-  const dx = b.x - p.x, dy = b.y - p.y;
-  const d = Math.hypot(dx, dy) || 1;
-  b.vx = (dx/d) * 4 + b.vx * -0.3;
-  b.vy = (dy/d) * 4 + b.vy * -0.3;
-  b.x = p.x + (dx/d) * (POCKET_R + BALL_R + 4);
-  b.y = p.y + (dy/d) * (POCKET_R + BALL_R + 4);
+function bounce(b,p) {
+  const dx=b.x-p.x, dy=b.y-p.y;
+  const d=Math.hypot(dx,dy)||1;
+  b.vx = (dx/d)*5; b.vy = (dy/d)*5;
+  b.x = p.x+(dx/d)*(PSINK+BR+4);
+  b.y = p.y+(dy/d)*(PSINK+BR+4);
 }
 
 function draw() {
-  ctx.clearRect(0, 0, BASE_W, BASE_H);
+  X.clearRect(0,0,W,H);
 
   // Wood rail
-  const wg = ctx.createLinearGradient(0, 0, BASE_W, BASE_H);
-  wg.addColorStop(0, '#9B6B3A'); wg.addColorStop(0.5, '#B07D4A'); wg.addColorStop(1, '#8A5A2C');
-  ctx.fillStyle = wg;
-  ctx.beginPath(); ctx.roundRect(0, 0, BASE_W, BASE_H, 10); ctx.fill();
+  const wg = X.createLinearGradient(0,0,W,H);
+  wg.addColorStop(0,'#9B6B3A'); wg.addColorStop(0.5,'#B07D4A'); wg.addColorStop(1,'#8A5A2C');
+  X.fillStyle=wg; X.beginPath(); X.roundRect(0,0,W,H,10); X.fill();
+
+  // Rail detail lines
+  X.strokeStyle='rgba(0,0,0,0.15)'; X.lineWidth=1;
+  X.strokeRect(4,4,W-8,H-8);
+  X.strokeRect(RAIL-2,RAIL-2,W-RAIL*2+4,H-RAIL*2+4);
 
   // Felt
-  const fg = ctx.createRadialGradient(CX, CY, 30, CX, CY, 350);
-  fg.addColorStop(0, '#2d6a4f'); fg.addColorStop(1, '#1b4332');
-  ctx.fillStyle = fg;
-  ctx.fillRect(IL, IT, FW, FH);
+  const fg = X.createRadialGradient(CX,CY,30,CX,CY,380);
+  fg.addColorStop(0,'#2a7050'); fg.addColorStop(1,'#1b4332');
+  X.fillStyle=fg; X.fillRect(IL,IT,IR-IL,IB-IT);
 
-  // Pockets
-  for (let p of POCKETS) {
-    // Outer glow
-    ctx.beginPath(); ctx.arc(p.x, p.y, POCKET_R + 5, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill();
-    // Hole
-    ctx.beginPath(); ctx.arc(p.x, p.y, POCKET_R, 0, Math.PI*2);
-    ctx.fillStyle = '#080808'; ctx.fill();
-    // Color ring
-    const col = p.forPlayer === 'justin' ? '#cc3333' : '#bbbbbb';
-    ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.stroke();
-    // Label
-    ctx.fillStyle = col; ctx.font = 'bold 9px Georgia'; ctx.textAlign = 'center';
-    const ly = p.forPlayer === 'justin' ? p.y + POCKET_R + 14 : p.y - POCKET_R - 6;
-    ctx.fillText(p.forPlayer === 'justin' ? '⬇ Justin sinks here' : '⬆ Morpheus sinks here', p.x, ly);
+  // Pocket cutouts in rail
+  for(let p of POCKETS) {
+    // Dark pocket hole
+    X.save();
+    X.beginPath(); X.arc(p.x, p.y, PR+2, 0, Math.PI*2);
+    X.fillStyle='#0a0a0a'; X.fill();
+    // Inner
+    X.beginPath(); X.arc(p.x, p.y, PR, 0, Math.PI*2);
+    X.fillStyle='#111'; X.fill();
+    // Colored rim
+    const pc = p.forPlayer==='justin' ? '#cc3333' : '#aaa';
+    X.strokeStyle=pc; X.lineWidth=3; X.stroke();
+    X.restore();
   }
 
   // Bumpers
-  for (let bmp of BUMPERS) {
-    ctx.beginPath(); ctx.arc(bmp.x+1.5, bmp.y+1.5, BUMPER_R, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill();
-    const bg = ctx.createRadialGradient(bmp.x-3, bmp.y-3, 1, bmp.x, bmp.y, BUMPER_R);
-    bg.addColorStop(0, '#f0d050'); bg.addColorStop(0.5, '#c9a830'); bg.addColorStop(1, '#8b6508');
-    ctx.beginPath(); ctx.arc(bmp.x, bmp.y, BUMPER_R, 0, Math.PI*2);
-    ctx.fillStyle = bg; ctx.fill();
-    ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 1; ctx.stroke();
+  for(let bp of BUMPERS) {
+    X.beginPath(); X.arc(bp.x+1.5,bp.y+1.5,BPR,0,Math.PI*2);
+    X.fillStyle='rgba(0,0,0,0.3)'; X.fill();
+    const bg=X.createRadialGradient(bp.x-3,bp.y-3,1,bp.x,bp.y,BPR);
+    bg.addColorStop(0,'#f0d050'); bg.addColorStop(0.5,'#c9a830'); bg.addColorStop(1,'#8b6508');
+    X.beginPath(); X.arc(bp.x,bp.y,BPR,0,Math.PI*2);
+    X.fillStyle=bg; X.fill();
+    X.strokeStyle='#d4af37'; X.lineWidth=1; X.stroke();
   }
 
-  // Aim line
-  if (selectedBall && aimCurrent && !anyMoving()) {
-    const dx = selectedBall.x - aimCurrent.x;
-    const dy = selectedBall.y - aimCurrent.y;
-    const len = Math.hypot(dx, dy);
-    if (len > 8) {
-      const nx = dx/len, ny = dy/len;
-      const power = Math.min(len / 12, 1);
-      const tipLen = 40 + power * 60;
-      const tipX = selectedBall.x + nx*tipLen, tipY = selectedBall.y + ny*tipLen;
-      ctx.save();
-      ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = `rgba(255,255,180,${0.4 + power*0.4})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(selectedBall.x, selectedBall.y); ctx.lineTo(tipX, tipY); ctx.stroke();
-      ctx.setLineDash([]);
-      // Arrow
-      ctx.beginPath();
-      ctx.moveTo(tipX, tipY);
-      ctx.lineTo(tipX - nx*12 - ny*6, tipY - ny*12 + nx*6);
-      ctx.lineTo(tipX - nx*12 + ny*6, tipY - ny*12 - nx*6);
-      ctx.closePath(); ctx.fillStyle = 'rgba(255,255,180,0.85)'; ctx.fill();
-      ctx.restore();
+  // Aim arrow
+  if(sel && aim && !moving()) {
+    const dx=sel.x-aim.x, dy=sel.y-aim.y;
+    const len=Math.hypot(dx,dy);
+    if(len>10) {
+      const nx=dx/len,ny=dy/len;
+      const pwr=Math.min(len/15,1);
+      const tl=30+pwr*70;
+      X.save();
+      X.setLineDash([5,4]);
+      X.strokeStyle=`rgba(255,255,180,${0.4+pwr*0.5})`; X.lineWidth=2;
+      X.beginPath(); X.moveTo(sel.x,sel.y); X.lineTo(sel.x+nx*tl,sel.y+ny*tl); X.stroke();
+      X.setLineDash([]);
+      const tx=sel.x+nx*tl, ty=sel.y+ny*tl;
+      X.beginPath(); X.moveTo(tx,ty);
+      X.lineTo(tx-nx*12-ny*6,ty-ny*12+nx*6);
+      X.lineTo(tx-nx*12+ny*6,ty-ny*12-nx*6);
+      X.closePath(); X.fillStyle='rgba(255,255,180,0.85)'; X.fill();
+      // Power bar
+      X.fillStyle = pwr<0.5?'#4a4':'#c44';
+      X.fillRect(IL+6,IB-16,pwr*60,6);
+      X.strokeStyle='#555'; X.lineWidth=1; X.strokeRect(IL+6,IB-16,60,6);
+      X.restore();
     }
   }
 
   // Balls
-  for (let b of balls) {
-    if (b.pocketed) continue;
-    // Shadow
-    ctx.beginPath(); ctx.arc(b.x+2, b.y+2, BALL_R, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fill();
-    // Body
-    const gr = ctx.createRadialGradient(b.x-3, b.y-3, 1, b.x, b.y, BALL_R);
-    gr.addColorStop(0, lighten(b.color, 55));
-    gr.addColorStop(0.5, b.color);
-    gr.addColorStop(1, darken(b.color, 40));
-    ctx.beginPath(); ctx.arc(b.x, b.y, BALL_R, 0, Math.PI*2);
-    ctx.fillStyle = gr; ctx.fill();
-    // Marked dot
-    if (b.marked) {
-      ctx.beginPath(); ctx.arc(b.x, b.y, BALL_R*0.35, 0, Math.PI*2);
-      ctx.fillStyle = b.player === 'justin' ? '#fff' : '#555'; ctx.fill();
+  for(let b of balls) {
+    if(b.out) continue;
+    X.beginPath(); X.arc(b.x+1.5,b.y+1.5,BR,0,Math.PI*2);
+    X.fillStyle='rgba(0,0,0,0.35)'; X.fill();
+    const gr=X.createRadialGradient(b.x-2,b.y-2,1,b.x,b.y,BR);
+    gr.addColorStop(0,lt(b.col,50)); gr.addColorStop(0.5,b.col); gr.addColorStop(1,dk(b.col,40));
+    X.beginPath(); X.arc(b.x,b.y,BR,0,Math.PI*2);
+    X.fillStyle=gr; X.fill();
+    X.strokeStyle='rgba(0,0,0,0.25)'; X.lineWidth=0.8; X.stroke();
+    if(b.m) {
+      X.beginPath(); X.arc(b.x,b.y,BR*0.35,0,Math.PI*2);
+      X.fillStyle = b.pl==='justin'?'#fff':'#444'; X.fill();
     }
-    // Selection ring
-    if (b === selectedBall) {
-      ctx.beginPath(); ctx.arc(b.x, b.y, BALL_R+4, 0, Math.PI*2);
-      ctx.strokeStyle = '#ffe866'; ctx.lineWidth = 2.5; ctx.stroke();
+    if(b===sel) {
+      X.beginPath(); X.arc(b.x,b.y,BR+4,0,Math.PI*2);
+      X.strokeStyle='#ffe866'; X.lineWidth=2.5; X.stroke();
     }
   }
+
+  // Labels on the side rails
+  X.save();
+  X.fillStyle='rgba(255,255,255,0.25)';
+  X.font='bold 10px Georgia'; X.textAlign='center';
+  // Top pocket label
+  X.fillText('↑ JUSTIN SINKS HERE', CX, IT+PR+22);
+  // Bottom pocket label
+  X.fillText('↓ MORPHEUS SINKS HERE', CX, IB-PR-14);
+  X.restore();
 }
 
-function lighten(h, a) {
+function lt(h,a) {
   return `rgb(${Math.min(255,parseInt(h.slice(1,3),16)+a)},${Math.min(255,parseInt(h.slice(3,5),16)+a)},${Math.min(255,parseInt(h.slice(5,7),16)+a)})`;
 }
-function darken(h, a) {
+function dk(h,a) {
   return `rgb(${Math.max(0,parseInt(h.slice(1,3),16)-a)},${Math.max(0,parseInt(h.slice(3,5),16)-a)},${Math.max(0,parseInt(h.slice(5,7),16)-a)})`;
 }
 
 function loop() {
-  if (gameOver) { draw(); return; }
-  const was = anyMoving();
-  physics();
-  draw();
-  const is = anyMoving();
-  if (was && !is && shotInFlight) {
-    shotInFlight = false;
-    onBallsStopped();
-  }
-  animFrame = requestAnimationFrame(loop);
+  if(over){draw();return;}
+  const was=moving();
+  phys(); draw();
+  if(was && !moving() && firing) { firing=false; stopped(); }
+  af=requestAnimationFrame(loop);
 }
 
-function getPos(e) {
-  const r = canvas.getBoundingClientRect();
-  const cx = e.touches ? e.touches[0].clientX : e.clientX;
-  const cy = e.touches ? e.touches[0].clientY : e.clientY;
-  return { x: (cx - r.left)/scale, y: (cy - r.top)/scale };
+function gp(e) {
+  const r=C.getBoundingClientRect();
+  const cx=e.touches?e.touches[0].clientX:e.clientX;
+  const cy=e.touches?e.touches[0].clientY:e.clientY;
+  return {x:(cx-r.left)/sc,y:(cy-r.top)/sc};
 }
 
-function canShoot() {
-  return !gameOver && !anyMoving() && !shotInFlight;
-}
-
-function onDown(e) {
+function onD(e) {
   e.preventDefault();
-  if (!canShoot()) return;
-  const pos = getPos(e);
-  const active = getActivePlayer();
-  for (let b of balls) {
-    if (b.pocketed || b.player !== active) continue;
-    if (Math.hypot(pos.x - b.x, pos.y - b.y) < BALL_R + 12) {
-      // Marked-first: during break always the marked ball. During play, if marked not pocketed, must pick marked.
-      const marked = balls.find(m => m.player === active && m.marked);
-      if (marked && !marked.pocketed && b !== marked) continue;
-      selectedBall = b; aimCurrent = pos; return;
+  if(over||moving()||firing) return;
+  const p=gp(e), a=activeP();
+  for(let b of balls) {
+    if(b.out||b.pl!==a) continue;
+    if(Math.hypot(p.x-b.x,p.y-b.y)<BR+14) {
+      const mb=balls.find(mm=>mm.pl===a&&mm.m);
+      if(mb&&!mb.out&&b!==mb) continue;
+      sel=b; aim=p; return;
     }
   }
 }
-
-function onMove(e) {
+function onM(e) { e.preventDefault(); if(sel) aim=gp(e); }
+function onU(e) {
   e.preventDefault();
-  if (selectedBall) aimCurrent = getPos(e);
-}
-
-function onUp(e) {
-  e.preventDefault();
-  if (!selectedBall || !aimCurrent) return;
-  const dx = selectedBall.x - aimCurrent.x;
-  const dy = selectedBall.y - aimCurrent.y;
-  const len = Math.hypot(dx, dy);
-  if (len > 10) {
-    const power = Math.min(len/12, 1) * 18;
-    selectedBall.vx = (dx/len) * power;
-    selectedBall.vy = (dy/len) * power;
-    shotInFlight = true;
-    pocketedThisTurn = false;
-    if (phase === 'break') {
-      breakPending[getActivePlayer()] = false;
-    }
+  if(!sel||!aim) return;
+  const dx=sel.x-aim.x,dy=sel.y-aim.y,len=Math.hypot(dx,dy);
+  if(len>10) {
+    const pwr=Math.min(len/15,1)*16;
+    sel.vx=(dx/len)*pwr; sel.vy=(dy/len)*pwr;
+    firing=true; sunk=false;
+    if(phase==='break') brk[activeP()]=false;
   }
-  selectedBall = null; aimCurrent = null;
+  sel=null; aim=null;
 }
 
-canvas.addEventListener('mousedown', onDown);
-canvas.addEventListener('mousemove', onMove);
-canvas.addEventListener('mouseup', onUp);
-canvas.addEventListener('touchstart', onDown, { passive: false });
-canvas.addEventListener('touchmove', onMove, { passive: false });
-canvas.addEventListener('touchend', onUp, { passive: false });
+C.addEventListener('mousedown',onD);
+C.addEventListener('mousemove',onM);
+C.addEventListener('mouseup',onU);
+C.addEventListener('touchstart',onD,{passive:false});
+C.addEventListener('touchmove',onM,{passive:false});
+C.addEventListener('touchend',onU,{passive:false});
 
 initGame();
 </script>
