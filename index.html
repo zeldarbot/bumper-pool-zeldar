@@ -99,17 +99,21 @@ const BUMPERS = [
   { x: CX - 34, y: IB - 2 },
   { x: CX + 34, y: IB - 2 },
 
-  // Center cross/diamond — 8 bumpers
-  // Vertical arm (2 above center, 2 below)
-  { x: CX, y: CY - 68 },
-  { x: CX, y: CY - 36 },
-  { x: CX, y: CY + 36 },
-  { x: CX, y: CY + 68 },
-  // Horizontal arm (2 left, 2 right)
-  { x: CX - 68, y: CY },
-  { x: CX - 36, y: CY },
-  { x: CX + 36, y: CY },
-  { x: CX + 68, y: CY },
+  // Center bumpers — diamond/rhombus pattern (from photo: ~12 bumpers)
+  // Top row: 2
+  { x: CX - 20, y: CY - 70 },
+  { x: CX + 20, y: CY - 70 },
+  // Upper middle: 3
+  { x: CX - 40, y: CY - 36 },
+  { x: CX,      y: CY - 36 },
+  { x: CX + 40, y: CY - 36 },
+  // Lower middle: 3
+  { x: CX - 40, y: CY + 36 },
+  { x: CX,      y: CY + 36 },
+  { x: CX + 40, y: CY + 36 },
+  // Bottom row: 2
+  { x: CX - 20, y: CY + 70 },
+  { x: CX + 20, y: CY + 70 },
 ];
 
 let balls, curP, over, phase, brk, breakShooting, sel, aim, firing, sunk, af;
@@ -139,21 +143,20 @@ function initGame() {
 
   balls = [
     // Justin (red) near bottom pocket
-    // Marked ball centered in front of pocket.
-    // 4 remaining balls in a single horizontal row, 2 on each side, evenly spaced.
-    // All at the same Y distance from the rail. Not stacked.
-    mk(CX,       bpY - 38, '#dd3333', 'justin', true),   // marked, center
-    mk(CX - 58,  bpY - 38, '#cc2222', 'justin', false),  // left near
-    mk(CX - 100, bpY - 38, '#cc2222', 'justin', false),  // left far
-    mk(CX + 58,  bpY - 38, '#cc2222', 'justin', false),  // right near
-    mk(CX + 100, bpY - 38, '#cc2222', 'justin', false),  // right far
+    // Shallow arc curving AWAY from pocket. Marked ball closest to pocket, center.
+    // Inner 2 balls slightly further from rail, outer 2 balls even further (arc shape).
+    mk(CX,       bpY - 30, '#dd3333', 'justin', true),   // marked, closest to pocket
+    mk(CX - 52,  bpY - 38, '#cc2222', 'justin', false),  // left inner (slightly further)
+    mk(CX - 96,  bpY - 50, '#cc2222', 'justin', false),  // left outer (curves away more)
+    mk(CX + 52,  bpY - 38, '#cc2222', 'justin', false),  // right inner
+    mk(CX + 96,  bpY - 50, '#cc2222', 'justin', false),  // right outer
 
-    // Morpheus (white) near top pocket — mirrored
-    mk(CX,       tpY + 38, '#dddddd', 'morpheus', true),
-    mk(CX - 58,  tpY + 38, '#cccccc', 'morpheus', false),
-    mk(CX - 100, tpY + 38, '#cccccc', 'morpheus', false),
-    mk(CX + 58,  tpY + 38, '#cccccc', 'morpheus', false),
-    mk(CX + 100, tpY + 38, '#cccccc', 'morpheus', false),
+    // Morpheus (white) near top pocket — mirrored arc
+    mk(CX,       tpY + 30, '#dddddd', 'morpheus', true),
+    mk(CX - 52,  tpY + 38, '#cccccc', 'morpheus', false),
+    mk(CX - 96,  tpY + 50, '#cccccc', 'morpheus', false),
+    mk(CX + 52,  tpY + 38, '#cccccc', 'morpheus', false),
+    mk(CX + 96,  tpY + 50, '#cccccc', 'morpheus', false),
   ];
 
   hud();
