@@ -11,9 +11,10 @@ body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;mi
 h1{font-size:1.2em;letter-spacing:2px;text-transform:uppercase;color:#c9a84c;margin-bottom:5px}
 #lobby{background:rgba(0,0,0,0.5);border:1px solid #c9a84c44;border-radius:10px;padding:20px;text-align:center;max-width:340px;width:100%}
 #lobby h2{color:#c9a84c;font-size:1.1em;margin-bottom:12px}
-.btn{background:#c9a84c;color:#1a1a2e;border:none;padding:10px 24px;font-size:0.95em;font-family:'Georgia',serif;text-transform:uppercase;letter-spacing:1px;border-radius:4px;cursor:pointer;font-weight:bold;margin:6px;display:inline-block}
+.btn{background:#c9a84c;color:#1a1a2e;border:none;padding:10px 24px;font-size:0.95em;font-family:'Georgia',serif;text-transform:uppercase;letter-spacing:1px;border-radius:4px;cursor:pointer;font-weight:bold;margin:6px;display:inline-block;width:80%;max-width:260px}
 .btn:hover{background:#e0c070}
-.btn.sm{font-size:0.8em;padding:6px 16px}
+.btn.sm{font-size:0.8em;padding:6px 16px;width:auto}
+.divider{color:#555;font-size:0.8em;margin:12px 0 8px;letter-spacing:2px}
 #room-code{font-size:1.6em;color:#c9a84c;letter-spacing:4px;font-weight:bold;margin:8px 0;font-family:monospace}
 #join-input{background:#222;border:2px solid #c9a84c;color:#f0e6d3;padding:8px 12px;font-size:1.2em;font-family:monospace;text-align:center;width:160px;border-radius:4px;letter-spacing:4px;text-transform:uppercase}
 #status-msg{color:#999;font-size:0.8em;margin-top:8px;min-height:18px}
@@ -38,17 +39,20 @@ canvas{border-radius:6px;cursor:crosshair;touch-action:none;max-width:100%}
 <h1>⚫ Bumper Pool ⚫</h1>
 
 <div id="lobby">
-  <h2>MULTIPLAYER</h2>
+  <h2>CHOOSE MODE</h2>
   <div id="lobby-menu">
-    <button class="btn" onclick="createGame()">Create Game</button><br>
+    <button class="btn" onclick="startLocal()">📱 Same Phone (Pass & Play)</button>
+    <div class="divider">— OR —</div>
+    <button class="btn" onclick="createGame()">🌐 Create Online Game</button><br>
     <input id="join-input" placeholder="CODE" maxlength="4"><br>
-    <button class="btn" onclick="joinGame()">Join Game</button>
+    <button class="btn" onclick="joinGame()">🌐 Join Online Game</button>
   </div>
   <div id="lobby-waiting" style="display:none">
     <div>Game Code:</div>
     <div id="room-code">----</div>
-    <button class="btn sm" id="share-btn" onclick="shareOrCopy()">📤 Share Link</button>
+    <button class="btn sm" onclick="shareOrCopy()">📤 Share Link</button>
     <div id="status-msg">Setting up...</div>
+    <button class="btn sm" onclick="backToMenu()" style="background:#555;margin-top:10px">← Back</button>
   </div>
 </div>
 
@@ -60,151 +64,103 @@ canvas{border-radius:6px;cursor:crosshair;touch-action:none;max-width:100%}
     <div class="pi"><div class="pn wht">Morpheus ⚪</div><div class="bd" id="md">●●●●●</div></div>
   </div>
   <canvas id="c"></canvas>
-  <div id="ins">Tap your ball · Drag to aim · Release to shoot</div>
+  <div id="ins">Tap ball · Drag to aim · Release to shoot</div>
 </div>
 <div id="ov"><div id="wt"></div><button class="btn" onclick="requestRematch()">Play Again</button></div>
 
 <script>
-// ===== NETWORKING =====
+// ===== MODES =====
+let mode = 'local'; // 'local' or 'online'
 let peer, conn, isHost=false, myRole=null, connected=false, currentCode='';
-const RETRIES = 3;
-const RETRY_MS = 2000;
 
-function genCode(){
-  const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let r='';for(let i=0;i<4;i++)r+=c[Math.floor(Math.random()*c.length)];return r;
+// ===== LOCAL PASS & PLAY =====
+function startLocal() {
+  mode='local'; myRole=null; // null means both players on same device
+  document.getElementById('lobby').style.display='none';
+  showGame('Pass & Play — hand the phone!');
+  initGameState();
 }
 
+function showGame(label) {
+  const g=document.getElementById('game');
+  g.style.display='flex';g.style.flexDirection='column';g.style.alignItems='center';
+  document.getElementById('you-are').textContent=label||'';
+}
+
+// ===== ONLINE =====
+function genCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let r='';for(let i=0;i<4;i++)r+=c[Math.floor(Math.random()*c.length)];return r;}
 function setStatus(t){document.getElementById('status-msg').textContent=t;}
+function backToMenu(){
+  if(peer)try{peer.destroy();}catch(e){}
+  document.getElementById('lobby-menu').style.display='block';
+  document.getElementById('lobby-waiting').style.display='none';
+}
 
 function createGame(attempt){
   attempt=attempt||0;
   const code=attempt===0?genCode():currentCode;
-  currentCode=code; isHost=true; myRole='justin';
+  currentCode=code;isHost=true;myRole='justin';mode='online';
   document.getElementById('lobby-menu').style.display='none';
   document.getElementById('lobby-waiting').style.display='block';
   document.getElementById('room-code').textContent=code;
   setStatus('Connecting to server...');
   history.replaceState(null,'','?host='+code);
-
-  if(peer){try{peer.destroy();}catch(e){}}
+  if(peer)try{peer.destroy();}catch(e){}
   peer=new Peer('bp-'+code,{debug:0,config:{iceServers:[
-    {urls:'stun:stun.l.google.com:19302'},
-    {urls:'stun:stun1.l.google.com:19302'},
-    {urls:'stun:stun2.l.google.com:19302'}
-  ]}});
+    {urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}]}});
   peer.on('open',()=>{setStatus('Room ready! Share the link.');});
   peer.on('connection',(c)=>{conn=c;wireConn();});
   peer.on('error',(e)=>{
-    if(e.type==='unavailable-id'&&attempt<RETRIES){
-      currentCode=genCode();
-      setStatus('Code taken, retrying...');
-      setTimeout(()=>createGame(attempt+1),500);
-    } else if(attempt<RETRIES){
-      setStatus('Retrying... ('+e.type+')');
-      setTimeout(()=>{if(peer)try{peer.destroy();}catch(x){}createGame(attempt+1);},RETRY_MS);
-    } else {
-      setStatus('Connection failed: '+e.type+'. Tap Create Game to retry.');
-      document.getElementById('lobby-menu').style.display='block';
-      document.getElementById('lobby-waiting').style.display='none';
-    }
-  });
-  peer.on('disconnected',()=>{
-    if(!connected){setStatus('Reconnecting...');peer.reconnect();}
-  });
+    if(e.type==='unavailable-id'&&attempt<3){currentCode=genCode();setStatus('Code taken, retrying...');setTimeout(()=>createGame(attempt+1),500);}
+    else if(attempt<3){setStatus('Retrying... ('+e.type+')');setTimeout(()=>{if(peer)try{peer.destroy();}catch(x){}createGame(attempt+1);},2000);}
+    else{setStatus('Connection failed. Try again or use Pass & Play.');backToMenu();}});
+  peer.on('disconnected',()=>{if(!connected)peer.reconnect();});
 }
 
 function joinGame(code,attempt){
-  attempt=attempt||0;
-  code=code||document.getElementById('join-input').value.toUpperCase().trim();
+  attempt=attempt||0;code=code||document.getElementById('join-input').value.toUpperCase().trim();
   if(code.length!==4)return;
-  currentCode=code; isHost=false; myRole='morpheus';
+  currentCode=code;isHost=false;myRole='morpheus';mode='online';
   document.getElementById('lobby-menu').style.display='none';
   document.getElementById('lobby-waiting').style.display='block';
   document.getElementById('room-code').textContent=code;
   setStatus('Connecting...');
-
-  if(peer){try{peer.destroy();}catch(e){}}
+  if(peer)try{peer.destroy();}catch(e){}
   peer=new Peer(null,{debug:0,config:{iceServers:[
-    {urls:'stun:stun.l.google.com:19302'},
-    {urls:'stun:stun1.l.google.com:19302'},
-    {urls:'stun:stun2.l.google.com:19302'}
-  ]}});
-  peer.on('open',()=>{
-    conn=peer.connect('bp-'+code,{reliable:true,serialization:'json'});
-    wireConn();
-  });
+    {urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'}]}});
+  peer.on('open',()=>{conn=peer.connect('bp-'+code,{reliable:true,serialization:'json'});wireConn();});
   peer.on('error',(e)=>{
-    if(e.type==='peer-unavailable'&&attempt<RETRIES){
-      setStatus('Room not found, retrying ('+(attempt+1)+'/'+RETRIES+')...');
-      setTimeout(()=>{if(peer)try{peer.destroy();}catch(x){}joinGame(code,attempt+1);},RETRY_MS);
-    } else if(attempt<RETRIES){
-      setStatus('Retrying... ('+e.type+')');
-      setTimeout(()=>{if(peer)try{peer.destroy();}catch(x){}joinGame(code,attempt+1);},RETRY_MS);
-    } else {
-      setStatus('Could not connect. Make sure host created the game first.');
-      document.getElementById('lobby-menu').style.display='block';
-      document.getElementById('lobby-waiting').style.display='none';
-    }
-  });
-  peer.on('disconnected',()=>{
-    if(!connected){setStatus('Reconnecting...');peer.reconnect();}
-  });
+    if(attempt<3){setStatus('Retrying ('+( attempt+1)+'/3)... '+e.type);setTimeout(()=>{if(peer)try{peer.destroy();}catch(x){}joinGame(code,attempt+1);},2500);}
+    else{setStatus('Could not connect. Host may need to recreate.');backToMenu();}});
+  peer.on('disconnected',()=>{if(!connected)peer.reconnect();});
 }
 
 function wireConn(){
-  conn.on('open',()=>{
-    connected=true;setStatus('Connected!');
-    setTimeout(startGame,500);
-  });
+  conn.on('open',()=>{connected=true;setStatus('Connected!');setTimeout(()=>{
+    document.getElementById('lobby').style.display='none';
+    showGame(myRole==='justin'?'You are: JUSTIN 🔴':'You are: MORPHEUS ⚪');
+    initGameState();},500);});
   conn.on('data',(d)=>handleMsg(d));
-  conn.on('close',()=>{
-    connected=false;
-    setStatus('Opponent disconnected. Reconnecting...');
-    // Try to reconnect
-    if(isHost){
-      // Host waits for new connection
-    } else {
-      setTimeout(()=>joinGame(currentCode,0),RETRY_MS);
-    }
-  });
-  conn.on('error',(e)=>{setStatus('Connection error: '+e);});
+  conn.on('close',()=>{connected=false;});
+  conn.on('error',()=>{});
 }
 
-function send(m){if(conn&&connected)try{conn.send(m);}catch(e){}}
-
+function send(m){if(mode==='online'&&conn&&connected)try{conn.send(m);}catch(e){}}
 function handleMsg(d){
-  if(d.type==='break-aim'){
-    const opp=myRole==='justin'?'morpheus':'justin';
-    brk[opp]=true;
-    breakShots[opp]={ballIdx:d.ballIdx,vx:d.vx,vy:d.vy};
-    hud();
-    if(brk.justin&&brk.morpheus)launchBreak();
-  } else if(d.type==='shot'){
-    const b=balls[d.ballIdx];
-    if(b){b.vx=d.vx;b.vy=d.vy;firing=true;sunk=false;}
-  } else if(d.type==='rematch'){
-    initGameState();
-  }
+  if(d.type==='break-aim'){const opp=myRole==='justin'?'morpheus':'justin';brk[opp]=true;breakShots[opp]={ballIdx:d.ballIdx,vx:d.vx,vy:d.vy};hud();if(brk.justin&&brk.morpheus)launchBreak();}
+  else if(d.type==='shot'){const b=balls[d.ballIdx];if(b){b.vx=d.vx;b.vy=d.vy;firing=true;sunk=false;}}
+  else if(d.type==='rematch'){initGameState();}
 }
 
 function shareOrCopy(){
-  const url=window.location.origin+window.location.pathname+'?join='+currentCode;
-  if(navigator.share){
-    navigator.share({title:'Bumper Pool',text:'Join my game! Code: '+currentCode,url:url}).catch(()=>{});
-  } else {
-    navigator.clipboard.writeText(url).then(()=>{
-      document.getElementById('share-btn').textContent='✅ Copied!';
-      setTimeout(()=>{document.getElementById('share-btn').textContent='📤 Share Link';},2000);
-    });
-  }
+  const url=location.origin+location.pathname+'?join='+currentCode;
+  if(navigator.share)navigator.share({title:'Bumper Pool',text:'Join my game!',url}).catch(()=>{});
+  else navigator.clipboard.writeText(url).then(()=>{setStatus('Link copied!');setTimeout(()=>setStatus('Room ready! Share the link.'),2000);});
 }
 
-// ===== GAME =====
-const Cv=document.getElementById('c');
-const Xx=Cv.getContext('2d');
-const W=400,H=680,RL=28;
-const IL=RL,IR=W-RL,IT=RL,IB=H-RL,CX=W/2,CY=H/2;
+// ===== GAME ENGINE =====
+const Cv=document.getElementById('c'),Xx=Cv.getContext('2d');
+const W=400,H=680,RL=28,IL=RL,IR=W-RL,IT=RL,IB=H-RL,CX=W/2,CY=H/2;
 const BR=10,BPR=12,PR=14,PSINK=17;
 let sc=1;
 function resize(){const mw=Math.min(window.innerWidth-12,W),mh=window.innerHeight-180;sc=Math.min(mw/W,mh/H);Cv.width=W*sc;Cv.height=H*sc;Xx.setTransform(sc,0,0,sc,0,0);}
@@ -212,79 +168,84 @@ resize();window.addEventListener('resize',()=>{resize();draw();});
 
 const POCKETS=[{x:CX,y:IT,forPlayer:'justin'},{x:CX,y:IB,forPlayer:'morpheus'}];
 const BUMPERS=[
-  {x:CX-34,y:IT+2},{x:CX+34,y:IT+2},
-  {x:CX-34,y:IB-2},{x:CX+34,y:IB-2},
+  {x:CX-34,y:IT+2},{x:CX+34,y:IT+2},{x:CX-34,y:IB-2},{x:CX+34,y:IB-2},
   {x:CX-20,y:CY-70},{x:CX+20,y:CY-70},
   {x:CX-40,y:CY-36},{x:CX,y:CY-36},{x:CX+40,y:CY-36},
   {x:CX-40,y:CY+36},{x:CX,y:CY+36},{x:CX+40,y:CY+36},
-  {x:CX-20,y:CY+70},{x:CX+20,y:CY+70},
-];
+  {x:CX-20,y:CY+70},{x:CX+20,y:CY+70}];
 
 let balls,curP,over,phase,brk,breakShooting,sel,aim,firing,sunk,af;
 let breakShots={justin:null,morpheus:null};
 function mk(x,y,col,pl,m){return{x,y,vx:0,vy:0,col,pl,m,out:false};}
 
-function startGame(){
-  document.getElementById('lobby').style.display='none';
-  const g=document.getElementById('game');g.style.display='flex';g.style.flexDirection='column';g.style.alignItems='center';
-  document.getElementById('you-are').textContent=myRole==='justin'?'You are: JUSTIN 🔴':'You are: MORPHEUS ⚪';
-  initGameState();
-}
-
 function initGameState(){
   document.getElementById('ov').classList.remove('show');
-  over=false;phase='break';brk={justin:false,morpheus:false};
-  breakShooting=false;curP='justin';sel=null;aim=null;firing=false;sunk=false;
+  over=false;phase='break';brk={justin:false,morpheus:false};breakShooting=false;
+  curP='justin';sel=null;aim=null;firing=false;sunk=false;
   breakShots={justin:null,morpheus:null};
   const bY=IB,tY=IT;
   balls=[
     mk(CX,bY-30,'#dd3333','justin',true),
-    mk(CX-52,bY-38,'#cc2222','justin',false),
-    mk(CX-96,bY-50,'#cc2222','justin',false),
-    mk(CX+52,bY-38,'#cc2222','justin',false),
-    mk(CX+96,bY-50,'#cc2222','justin',false),
+    mk(CX-52,bY-38,'#cc2222','justin',false),mk(CX-96,bY-50,'#cc2222','justin',false),
+    mk(CX+52,bY-38,'#cc2222','justin',false),mk(CX+96,bY-50,'#cc2222','justin',false),
     mk(CX,tY+30,'#dddddd','morpheus',true),
-    mk(CX-52,tY+38,'#cccccc','morpheus',false),
-    mk(CX-96,tY+50,'#cccccc','morpheus',false),
-    mk(CX+52,tY+38,'#cccccc','morpheus',false),
-    mk(CX+96,tY+50,'#cccccc','morpheus',false),
-  ];
+    mk(CX-52,tY+38,'#cccccc','morpheus',false),mk(CX-96,tY+50,'#cccccc','morpheus',false),
+    mk(CX+52,tY+38,'#cccccc','morpheus',false),mk(CX+96,tY+50,'#cccccc','morpheus',false)];
   hud();if(af)cancelAnimationFrame(af);loop();
 }
 
 function requestRematch(){send({type:'rematch'});initGameState();}
 
 function hud(){
-  const jl=balls.filter(b=>b.pl==='justin'&&!b.out).length;
-  const ml=balls.filter(b=>b.pl==='morpheus'&&!b.out).length;
+  const jl=balls.filter(b=>b.pl==='justin'&&!b.out).length,ml=balls.filter(b=>b.pl==='morpheus'&&!b.out).length;
   document.getElementById('jd').innerHTML=`<span style="color:#e05555">${'●'.repeat(jl)}</span><span style="color:#333">${'○'.repeat(5-jl)}</span>`;
   document.getElementById('md').innerHTML=`<span style="color:#ccc">${'●'.repeat(ml)}</span><span style="color:#333">${'○'.repeat(5-ml)}</span>`;
   if(over)return;
   const ti=document.getElementById('ti'),pm=document.getElementById('pm');
   if(phase==='break'){
-    if(breakShooting){ti.textContent='BREAK!';pm.textContent='';}
-    else{
+    if(breakShooting){ti.textContent='BREAK!';pm.textContent='';return;}
+    if(mode==='local'){
+      // Local: both aim sequentially
+      if(!brk.justin){ti.textContent='BREAK — Justin';pm.textContent='Aim your red marked ball!';}
+      else if(!brk.morpheus){ti.textContent='BREAK — Morpheus';pm.textContent='Hand phone! Aim white marked ball.';}
+      else{ti.textContent='BREAK!';pm.textContent='';}
+    } else {
       const my=brk[myRole],opp=brk[myRole==='justin'?'morpheus':'justin'];
-      if(!my){ti.textContent='SIMULTANEOUS BREAK';pm.textContent='Aim your marked ball!';}
+      if(!my){ti.textContent='BREAK';pm.textContent='Aim your marked ball!';}
       else if(!opp){ti.textContent='BREAK';pm.textContent='Waiting for opponent...';}
       else{ti.textContent='BREAK!';pm.textContent='';}
     }
-  }else{
+  } else {
     ti.textContent=curP==='justin'?"Justin's turn 🔴":"Morpheus's turn ⚪";
-    if(curP===myRole){
+    if(mode==='local'){
       const mb=balls.find(b=>b.pl===curP&&b.m);
-      pm.textContent=(mb&&!mb.out)?'Must pocket marked ball first':'Your shot!';
-    }else pm.textContent='Waiting for opponent...';
+      pm.textContent=(mb&&!mb.out)?'Must pocket marked ball first':'';
+    } else {
+      if(curP===myRole){const mb=balls.find(b=>b.pl===curP&&b.m);pm.textContent=(mb&&!mb.out)?'Must pocket marked ball first':'Your shot!';}
+      else pm.textContent='Waiting for opponent...';
+    }
   }
 }
 
+function activePlayer(){
+  if(phase==='break'){
+    if(mode==='local'){return!brk.justin?'justin':(!brk.morpheus?'morpheus':null);}
+    return myRole;
+  }
+  return curP;
+}
+
 function canIShoot(){
-  if(over||moving()||firing)return false;
-  if(phase==='break')return!brk[myRole];
+  if(over||mv()||firing)return false;
+  if(phase==='break'){
+    if(mode==='local')return!brk.justin||(!brk.morpheus&&brk.justin);
+    return!brk[myRole];
+  }
+  if(mode==='local')return true;
   return curP===myRole;
 }
 
-function moving(){return balls.some(b=>!b.out&&(Math.abs(b.vx)>0.04||Math.abs(b.vy)>0.04));}
+function mv(){return balls.some(b=>!b.out&&(Math.abs(b.vx)>0.04||Math.abs(b.vy)>0.04));}
 
 function launchBreak(){
   if(breakShots.justin){const b=balls[breakShots.justin.ballIdx];if(b){b.vx=breakShots.justin.vx;b.vy=breakShots.justin.vy;}}
@@ -294,29 +255,24 @@ function launchBreak(){
 
 function stopped(){
   chkWin();if(over)return;
-  if(phase==='break'){
-    breakShooting=false;phase='play';
+  if(phase==='break'){breakShooting=false;phase='play';
     const jm=balls.find(b=>b.pl==='justin'&&b.m),mm=balls.find(b=>b.pl==='morpheus'&&b.m);
     const jT=POCKETS.find(p=>p.forPlayer==='justin'),mT=POCKETS.find(p=>p.forPlayer==='morpheus');
     const jD=jm.out?0:Math.hypot(jm.x-jT.x,jm.y-jT.y),mD=mm.out?0:Math.hypot(mm.x-mT.x,mm.y-mT.y);
     curP=jD<=mD?'justin':'morpheus';
-  }else{if(!sunk)curP=curP==='justin'?'morpheus':'justin';}
+  } else {if(!sunk)curP=curP==='justin'?'morpheus':'justin';}
   sunk=false;sel=null;aim=null;hud();
 }
 
 function chkWin(){
-  const jd=balls.filter(b=>b.pl==='justin'&&!b.out).length===0;
-  const md=balls.filter(b=>b.pl==='morpheus'&&!b.out).length===0;
-  if(jd||md){over=true;
-    document.getElementById('wt').textContent=jd?'JUSTIN WINS! 🔴':'MORPHEUS WINS! ⚪';
+  const jd=balls.filter(b=>b.pl==='justin'&&!b.out).length===0,md=balls.filter(b=>b.pl==='morpheus'&&!b.out).length===0;
+  if(jd||md){over=true;document.getElementById('wt').textContent=jd?'JUSTIN WINS! 🔴':'MORPHEUS WINS! ⚪';
     document.getElementById('ov').classList.add('show');hud();}
 }
 
 function phys(){
-  if(!moving())return;
-  const F=0.985;
-  for(let b of balls){
-    if(b.out)continue;
+  if(!mv())return;const F=0.985;
+  for(let b of balls){if(b.out)continue;
     b.x+=b.vx;b.y+=b.vy;b.vx*=F;b.vy*=F;
     if(Math.abs(b.vx)<0.04)b.vx=0;if(Math.abs(b.vy)<0.04)b.vy=0;
     if(b.y-BR<IT&&Math.abs(b.x-CX)>PR+6){b.y=IT+BR;b.vy=Math.abs(b.vy)*0.82;}
@@ -328,8 +284,8 @@ function phys(){
         if(dot<0){b.vx-=2.05*dot*nx;b.vy-=2.05*dot*ny;}b.x=bp.x+nx*(mn+0.5);b.y=bp.y+ny*(mn+0.5);}}
     for(let p of POCKETS){if(Math.hypot(b.x-p.x,b.y-p.y)<PSINK){
       if(p.forPlayer===b.pl){const mb=balls.find(mm=>mm.pl===b.pl&&mm.m);
-        if(mb&&!mb.out&&b!==mb){bounce(b,p);}else{b.out=true;b.vx=0;b.vy=0;sunk=true;}}
-      else{bounce(b,p);}}}
+        if(mb&&!mb.out&&b!==mb)bounce(b,p);else{b.out=true;b.vx=0;b.vy=0;sunk=true;}}
+      else bounce(b,p);}}
   }
   for(let i=0;i<balls.length;i++){for(let j=i+1;j<balls.length;j++){
     const a=balls[i],b=balls[j];if(a.out||b.out)continue;
@@ -350,18 +306,13 @@ function draw(){
   Xx.strokeStyle='rgba(0,0,0,0.2)';Xx.lineWidth=1.5;Xx.strokeRect(RL-1,RL-1,W-RL*2+2,H-RL*2+2);
   const fg=Xx.createRadialGradient(CX,CY,30,CX,CY,380);fg.addColorStop(0,'#2a7050');fg.addColorStop(1,'#1b4332');
   Xx.fillStyle=fg;Xx.fillRect(IL,IT,IR-IL,IB-IT);
-  for(let p of POCKETS){
-    Xx.beginPath();Xx.arc(p.x,p.y,PR+3,0,Math.PI*2);Xx.fillStyle='#080808';Xx.fill();
+  for(let p of POCKETS){Xx.beginPath();Xx.arc(p.x,p.y,PR+3,0,Math.PI*2);Xx.fillStyle='#080808';Xx.fill();
     Xx.beginPath();Xx.arc(p.x,p.y,PR,0,Math.PI*2);Xx.fillStyle='#111';Xx.fill();
     Xx.strokeStyle=p.forPlayer==='justin'?'#cc3333':'#aaa';Xx.lineWidth=3;Xx.stroke();}
-  for(let bp of BUMPERS){
-    Xx.beginPath();Xx.arc(bp.x+1,bp.y+1,BPR,0,Math.PI*2);Xx.fillStyle='rgba(0,0,0,0.3)';Xx.fill();
-    const bg=Xx.createRadialGradient(bp.x-3,bp.y-3,1,bp.x,bp.y,BPR);
-    bg.addColorStop(0,'#f0d050');bg.addColorStop(0.5,'#c9a830');bg.addColorStop(1,'#8b6508');
-    Xx.beginPath();Xx.arc(bp.x,bp.y,BPR,0,Math.PI*2);Xx.fillStyle=bg;Xx.fill();
-    Xx.strokeStyle='#b89530';Xx.lineWidth=1;Xx.stroke();}
-  if(sel&&aim&&!moving()){
-    const dx=sel.x-aim.x,dy=sel.y-aim.y,len=Math.hypot(dx,dy);
+  for(let bp of BUMPERS){Xx.beginPath();Xx.arc(bp.x+1,bp.y+1,BPR,0,Math.PI*2);Xx.fillStyle='rgba(0,0,0,0.3)';Xx.fill();
+    const bg=Xx.createRadialGradient(bp.x-3,bp.y-3,1,bp.x,bp.y,BPR);bg.addColorStop(0,'#f0d050');bg.addColorStop(0.5,'#c9a830');bg.addColorStop(1,'#8b6508');
+    Xx.beginPath();Xx.arc(bp.x,bp.y,BPR,0,Math.PI*2);Xx.fillStyle=bg;Xx.fill();Xx.strokeStyle='#b89530';Xx.lineWidth=1;Xx.stroke();}
+  if(sel&&aim&&!mv()){const dx=sel.x-aim.x,dy=sel.y-aim.y,len=Math.hypot(dx,dy);
     if(len>10){const nx=dx/len,ny=dy/len,pwr=Math.min(len/15,1),tl=30+pwr*70;
       Xx.save();Xx.setLineDash([5,4]);Xx.strokeStyle=`rgba(255,255,180,${0.4+pwr*0.5})`;Xx.lineWidth=2;
       Xx.beginPath();Xx.moveTo(sel.x,sel.y);Xx.lineTo(sel.x+nx*tl,sel.y+ny*tl);Xx.stroke();Xx.setLineDash([]);
@@ -383,25 +334,40 @@ function draw(){
 function lt(h,a){return`rgb(${Math.min(255,parseInt(h.slice(1,3),16)+a)},${Math.min(255,parseInt(h.slice(3,5),16)+a)},${Math.min(255,parseInt(h.slice(5,7),16)+a)})`;}
 function dk(h,a){return`rgb(${Math.max(0,parseInt(h.slice(1,3),16)-a)},${Math.max(0,parseInt(h.slice(3,5),16)-a)},${Math.max(0,parseInt(h.slice(5,7),16)-a)})`;}
 
-function loop(){if(over){draw();return;}const was=moving();phys();draw();
-  if(was&&!moving()&&firing){firing=false;stopped();}af=requestAnimationFrame(loop);}
+function loop(){if(over){draw();return;}const was=mv();phys();draw();
+  if(was&&!mv()&&firing){firing=false;stopped();}af=requestAnimationFrame(loop);}
 
 function gp(e){const r=Cv.getBoundingClientRect();const cx=e.touches?e.touches[0].clientX:e.clientX;
   const cy=e.touches?e.touches[0].clientY:e.clientY;return{x:(cx-r.left)/sc,y:(cy-r.top)/sc};}
 
 function onD(e){e.preventDefault();if(!canIShoot())return;const p=gp(e);
-  for(let b of balls){if(b.out||b.pl!==myRole)continue;
+  // Determine which player's balls can be selected
+  let allowedPl;
+  if(mode==='local'){
+    allowedPl=activePlayer();if(!allowedPl)return;
+  } else {
+    allowedPl=myRole;
+  }
+  for(let b of balls){if(b.out||b.pl!==allowedPl)continue;
     if(Math.hypot(p.x-b.x,p.y-b.y)<BR+14){
-      const mb=balls.find(mm=>mm.pl===myRole&&mm.m);if(mb&&!mb.out&&b!==mb)continue;
+      const mb=balls.find(mm=>mm.pl===allowedPl&&mm.m);if(mb&&!mb.out&&b!==mb)continue;
       sel=b;aim=p;return;}}}
+
 function onM(e){e.preventDefault();if(sel)aim=gp(e);}
+
 function onU(e){e.preventDefault();if(!sel||!aim)return;
   const dx=sel.x-aim.x,dy=sel.y-aim.y,len=Math.hypot(dx,dy);
   if(len>10){const pwr=Math.min(len/15,1)*16,vx=(dx/len)*pwr,vy=(dy/len)*pwr,idx=balls.indexOf(sel);
-    if(phase==='break'){brk[myRole]=true;breakShots[myRole]={ballIdx:idx,vx,vy};
-      send({type:'break-aim',ballIdx:idx,vx,vy});hud();
-      if(brk.justin&&brk.morpheus)launchBreak();}
-    else{sel.vx=vx;sel.vy=vy;firing=true;sunk=false;send({type:'shot',ballIdx:idx,vx,vy});}}
+    if(phase==='break'){
+      const pl=mode==='local'?sel.pl:myRole;
+      brk[pl]=true;breakShots[pl]={ballIdx:idx,vx,vy};
+      if(mode==='online')send({type:'break-aim',ballIdx:idx,vx,vy});
+      hud();
+      if(brk.justin&&brk.morpheus)launchBreak();
+    } else {
+      sel.vx=vx;sel.vy=vy;firing=true;sunk=false;
+      if(mode==='online')send({type:'shot',ballIdx:idx,vx,vy});
+    }}
   sel=null;aim=null;}
 
 Cv.addEventListener('mousedown',onD);Cv.addEventListener('mousemove',onM);Cv.addEventListener('mouseup',onU);
@@ -409,12 +375,11 @@ Cv.addEventListener('touchstart',onD,{passive:false});Cv.addEventListener('touch
 Cv.addEventListener('touchend',onU,{passive:false});
 
 // Auto-join from URL
-(function(){const p=new URLSearchParams(location.search);const j=p.get('join');if(j){
-  document.getElementById('join-input').value=j.toUpperCase();setTimeout(()=>joinGame(j.toUpperCase()),800);}})();
+(function(){const p=new URLSearchParams(location.search);const j=p.get('join');
+  if(j){document.getElementById('join-input').value=j.toUpperCase();setTimeout(()=>joinGame(j.toUpperCase()),800);}})();
 
-// Reconnect on tab focus
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){
-  if(peer&&peer.disconnected&&!peer.destroyed){peer.reconnect();}}});
+// Reconnect on visibility
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&peer&&peer.disconnected&&!peer.destroyed)peer.reconnect();});
 </script>
 </body>
 </html>
