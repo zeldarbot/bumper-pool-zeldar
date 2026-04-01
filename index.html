@@ -80,6 +80,7 @@
   <div id="lobby-waiting" style="display:none">
     <div>Share this code:</div>
     <div id="room-code">----</div>
+    <button class="lobby-btn" id="copy-btn" onclick="copyCode()" style="font-size:0.8em;padding:6px 16px;">📋 Copy Code</button>
     <div id="status-msg">Waiting for opponent...</div>
   </div>
 </div>
@@ -526,6 +527,53 @@ Cv.addEventListener('mouseup',onU);
 Cv.addEventListener('touchstart',onD,{passive:false});
 Cv.addEventListener('touchmove',onM,{passive:false});
 Cv.addEventListener('touchend',onU,{passive:false});
+
+// Copy code to clipboard
+function copyCode() {
+  const code = document.getElementById('room-code').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    document.getElementById('copy-btn').textContent = '✅ Copied!';
+    setTimeout(() => { document.getElementById('copy-btn').textContent = '📋 Copy Code'; }, 2000);
+  }).catch(() => {
+    // Fallback: select text
+    const el = document.getElementById('room-code');
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+  });
+}
+
+// Auto-reconnect on tab focus (iOS kills WebRTC when backgrounded)
+let lastCode = null;
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible') {
+    // Check if peer is still alive
+    if(peer && peer.disconnected && !peer.destroyed) {
+      document.getElementById('status-msg').textContent = 'Reconnecting...';
+      peer.reconnect();
+    } else if(peer && peer.destroyed) {
+      // Peer was destroyed, need to recreate
+      const code = document.getElementById('room-code').textContent;
+      if(code && code !== '----') {
+        document.getElementById('status-msg').textContent = 'Reconnecting...';
+        if(isHost) {
+          peer = new Peer('bpool-' + code, { debug: 0 });
+          peer.on('open', () => {
+            document.getElementById('status-msg').textContent = 'Room ready. Share the code!';
+          });
+          peer.on('connection', (c) => { conn = c; setupConn(); });
+        } else {
+          peer = new Peer(null, { debug: 0 });
+          peer.on('open', () => {
+            conn = peer.connect('bpool-' + code, { reliable: true });
+            setupConn();
+          });
+        }
+      }
+    }
+  }
+});
 </script>
 </body>
 </html>
