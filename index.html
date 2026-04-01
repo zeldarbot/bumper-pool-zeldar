@@ -1,1 +1,553 @@
-<!DOCTYPE html><html><body>placeholder</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Bumper Pool — Justin vs Morpheus</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    font-family: 'Georgia', serif;
+    color: #f0e6d3;
+    padding: 10px;
+  }
+  h1 {
+    font-size: 1.4em;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #c9a84c;
+    margin-bottom: 8px;
+    text-shadow: 0 0 10px rgba(201,168,76,0.4);
+  }
+  #scoreboard {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 10px;
+    background: rgba(0,0,0,0.4);
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 1px solid #c9a84c44;
+  }
+  .player-info {
+    text-align: center;
+    min-width: 100px;
+  }
+  .player-name {
+    font-size: 1em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .player-name.red { color: #e05555; }
+  .player-name.gray { color: #ccc; }
+  .ball-count {
+    font-size: 1.4em;
+    margin-top: 2px;
+  }
+  #turn-indicator {
+    font-size: 0.9em;
+    color: #c9a84c;
+    margin-bottom: 6px;
+    min-height: 20px;
+    text-align: center;
+  }
+  canvas {
+    border-radius: 6px;
+    cursor: crosshair;
+    touch-action: none;
+    max-width: 100%;
+  }
+  #overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  #overlay.show { display: flex; }
+  #winner-text {
+    font-size: 2.5em;
+    color: #c9a84c;
+    text-shadow: 0 0 20px rgba(201,168,76,0.8);
+    margin-bottom: 20px;
+    text-align: center;
+    padding: 0 20px;
+  }
+  #replay-btn {
+    background: #c9a84c;
+    color: #1a1a2e;
+    border: none;
+    padding: 12px 30px;
+    font-size: 1.1em;
+    font-family: 'Georgia', serif;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  #replay-btn:hover { background: #e0c070; }
+  #instructions {
+    font-size: 0.75em;
+    color: #888;
+    margin-top: 8px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<h1>Bumper Pool</h1>
+<div id="scoreboard">
+  <div class="player-info">
+    <div class="player-name red">Justin 🔴</div>
+    <div class="ball-count" id="justin-count">●●●●●</div>
+  </div>
+  <div class="player-info" style="border-left:1px solid #444; border-right:1px solid #444; padding:0 20px;">
+    <div id="turn-indicator">Justin's turn</div>
+  </div>
+  <div class="player-info">
+    <div class="player-name gray">Morpheus ⚪</div>
+    <div class="ball-count" id="morpheus-count">●●●●●</div>
+  </div>
+</div>
+<canvas id="c"></canvas>
+<div id="instructions">Click a ball to select · Drag to aim · Release to shoot</div>
+
+<div id="overlay">
+  <div id="winner-text"></div>
+  <button id="replay-btn" onclick="initGame()">Play Again</button>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const BASE_W = 520;
+const BASE_H = 720;
+let scale = 1;
+
+function resize() {
+  const maxW = Math.min(window.innerWidth - 20, 520);
+  const maxH = window.innerHeight - 180;
+  scale = Math.min(maxW / BASE_W, maxH / BASE_H);
+  canvas.width = BASE_W * scale;
+  canvas.height = BASE_H * scale;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+resize();
+window.addEventListener('resize', () => { resize(); draw(); });
+
+// Table dimensions
+const RAIL = 32;
+const TW = BASE_W;
+const TH = BASE_H;
+const INNER_L = RAIL;
+const INNER_R = TW - RAIL;
+const INNER_T = RAIL;
+const INNER_B = TH - RAIL;
+const POCKET_R = 14;
+const BALL_R = 11;
+const BUMPER_R = 14;
+
+// Pocket positions: each player has 2 pockets on their end
+// Justin (red) shoots at TOP pockets, Morpheus (gray) shoots at BOTTOM pockets
+// Pockets are on the END rails
+const POCKETS = [
+  // Top end (Morpheus's goal — red tries to pocket here first with marked ball)
+  { x: INNER_L, y: INNER_T, owner: 'morpheus_end' },
+  { x: INNER_R, y: INNER_T, owner: 'morpheus_end' },
+  // Bottom end (Justin's goal — gray tries to pocket here first with marked ball)
+  { x: INNER_L, y: INNER_B, owner: 'justin_end' },
+  { x: INNER_R, y: INNER_B, owner: 'justin_end' },
+];
+
+// Bumpers: cross pattern in center
+const CX = TW / 2, CY = TH / 2;
+const BUMPERS = [
+  { x: CX, y: CY },
+  { x: CX - 55, y: CY },
+  { x: CX + 55, y: CY },
+  { x: CX, y: CY - 55 },
+  { x: CX, y: CY + 55 },
+  // Corner bumpers of the cross arms
+  { x: CX - 55, y: CY - 40 },
+  { x: CX + 55, y: CY - 40 },
+  { x: CX - 55, y: CY + 40 },
+  { x: CX + 55, y: CY + 40 },
+];
+
+let balls, currentPlayer, shooting, selectedBall, aimStart, aimCurrent, gameOver;
+let animFrame;
+
+function makeBall(x, y, color, player, marked) {
+  return { x, y, vx: 0, vy: 0, color, player, marked, pocketed: false };
+}
+
+function initGame() {
+  document.getElementById('overlay').classList.remove('show');
+  gameOver = false;
+  currentPlayer = 'justin'; // Justin goes first
+  shooting = false;
+  selectedBall = null;
+  aimStart = null;
+  aimCurrent = null;
+
+  // Justin = red, starts bottom area, shoots up toward top pockets
+  // Morpheus = gray, starts top area, shoots down toward bottom pockets
+  // Marked balls must be pocketed in opponent's corner pockets first
+  balls = [
+    // Justin's balls (red) — positioned at bottom
+    makeBall(INNER_L + 30, INNER_B - 30, '#e05555', 'justin', true),   // marked (left)
+    makeBall(INNER_R - 30, INNER_B - 30, '#e05555', 'justin', true),   // marked (right)
+    makeBall(CX - 60, INNER_B - 80, '#cc2222', 'justin', false),
+    makeBall(CX, INNER_B - 80, '#cc2222', 'justin', false),
+    makeBall(CX + 60, INNER_B - 80, '#cc2222', 'justin', false),
+
+    // Morpheus's balls (gray) — positioned at top
+    makeBall(INNER_L + 30, INNER_T + 30, '#cccccc', 'morpheus', true),  // marked (left)
+    makeBall(INNER_R - 30, INNER_T + 30, '#cccccc', 'morpheus', true),  // marked (right)
+    makeBall(CX - 60, INNER_T + 80, '#aaaaaa', 'morpheus', false),
+    makeBall(CX, INNER_T + 80, '#aaaaaa', 'morpheus', false),
+    makeBall(CX + 60, INNER_T + 80, '#aaaaaa', 'morpheus', false),
+  ];
+
+  updateScoreboard();
+  if (animFrame) cancelAnimationFrame(animFrame);
+  loop();
+}
+
+function updateScoreboard() {
+  const jBalls = balls.filter(b => b.player === 'justin' && !b.pocketed);
+  const mBalls = balls.filter(b => b.player === 'morpheus' && !b.pocketed);
+  document.getElementById('justin-count').textContent = '●'.repeat(jBalls.length) + '○'.repeat(5 - jBalls.length);
+  document.getElementById('morpheus-count').textContent = '●'.repeat(mBalls.length) + '○'.repeat(5 - mBalls.length);
+  document.getElementById('turn-indicator').textContent = 
+    gameOver ? '' : (currentPlayer === 'justin' ? "Justin's turn 🔴" : "Morpheus's turn ⚪");
+}
+
+function checkWin() {
+  const jDone = balls.filter(b => b.player === 'justin' && !b.pocketed).length === 0;
+  const mDone = balls.filter(b => b.player === 'morpheus' && !b.pocketed).length === 0;
+  if (jDone || mDone) {
+    gameOver = true;
+    const winner = jDone ? 'JUSTIN WINS! 🔴' : 'MORPHEUS WINS! ⚪';
+    document.getElementById('winner-text').textContent = winner;
+    document.getElementById('overlay').classList.add('show');
+    updateScoreboard();
+  }
+}
+
+function anyMoving() {
+  return balls.some(b => !b.pocketed && (Math.abs(b.vx) > 0.05 || Math.abs(b.vy) > 0.05));
+}
+
+let pocketedThisTurn = false;
+
+function physics() {
+  if (!anyMoving()) return;
+  const FRICTION = 0.985;
+  const MIN_V = 0.05;
+
+  for (let b of balls) {
+    if (b.pocketed) continue;
+    b.x += b.vx;
+    b.y += b.vy;
+    b.vx *= FRICTION;
+    b.vy *= FRICTION;
+    if (Math.abs(b.vx) < MIN_V) b.vx = 0;
+    if (Math.abs(b.vy) < MIN_V) b.vy = 0;
+
+    // Wall collisions
+    if (b.x - BALL_R < INNER_L) { b.x = INNER_L + BALL_R; b.vx = Math.abs(b.vx); }
+    if (b.x + BALL_R > INNER_R) { b.x = INNER_R - BALL_R; b.vx = -Math.abs(b.vx); }
+    if (b.y - BALL_R < INNER_T) { b.y = INNER_T + BALL_R; b.vy = Math.abs(b.vy); }
+    if (b.y + BALL_R > INNER_B) { b.y = INNER_B - BALL_R; b.vy = -Math.abs(b.vy); }
+
+    // Bumper collisions
+    for (let bmp of BUMPERS) {
+      const dx = b.x - bmp.x, dy = b.y - bmp.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const minD = BALL_R + BUMPER_R;
+      if (dist < minD && dist > 0) {
+        const nx = dx/dist, ny = dy/dist;
+        const dot = b.vx*nx + b.vy*ny;
+        b.vx -= 2*dot*nx;
+        b.vy -= 2*dot*ny;
+        b.x = bmp.x + nx*minD;
+        b.y = bmp.y + ny*minD;
+      }
+    }
+
+    // Pocket collisions
+    for (let p of POCKETS) {
+      const dx = b.x - p.x, dy = b.y - p.y;
+      if (Math.sqrt(dx*dx + dy*dy) < POCKET_R + BALL_R * 0.5) {
+        b.pocketed = true;
+        b.vx = 0; b.vy = 0;
+        pocketedThisTurn = true;
+      }
+    }
+  }
+
+  // Ball-ball collisions
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i+1; j < balls.length; j++) {
+      const a = balls[i], b = balls[j];
+      if (a.pocketed || b.pocketed) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < BALL_R*2 && dist > 0) {
+        const nx = dx/dist, ny = dy/dist;
+        const dvx = a.vx - b.vx, dvy = a.vy - b.vy;
+        const imp = dvx*nx + dvy*ny;
+        if (imp > 0) {
+          a.vx -= imp*nx; a.vy -= imp*ny;
+          b.vx += imp*nx; b.vy += imp*ny;
+        }
+        const overlap = BALL_R*2 - dist;
+        a.x -= nx*overlap/2; a.y -= ny*overlap/2;
+        b.x += nx*overlap/2; b.y += ny*overlap/2;
+      }
+    }
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, TW, TH);
+
+  // Rail / wood border
+  const railGrad = ctx.createLinearGradient(0, 0, TW, TH);
+  railGrad.addColorStop(0, '#8B5E3C');
+  railGrad.addColorStop(0.5, '#A0714F');
+  railGrad.addColorStop(1, '#7A4F2E');
+  ctx.fillStyle = railGrad;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, TW, TH, 12);
+  ctx.fill();
+
+  // Felt surface
+  const feltGrad = ctx.createRadialGradient(CX, CY, 50, CX, CY, 350);
+  feltGrad.addColorStop(0, '#2d6a4f');
+  feltGrad.addColorStop(1, '#1b4332');
+  ctx.fillStyle = feltGrad;
+  ctx.fillRect(INNER_L, INNER_T, INNER_R - INNER_L, INNER_B - INNER_T);
+
+  // Center line (faint)
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(INNER_L, CY);
+  ctx.lineTo(INNER_R, CY);
+  ctx.stroke();
+
+  // Pockets
+  for (let p of POCKETS) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, POCKET_R, 0, Math.PI*2);
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fill();
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Pocket label ring
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, POCKET_R + 3, 0, Math.PI*2);
+    ctx.strokeStyle = p.owner === 'morpheus_end' ? 'rgba(224,85,85,0.5)' : 'rgba(180,180,180,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Bumpers
+  for (let bmp of BUMPERS) {
+    // Shadow
+    ctx.beginPath();
+    ctx.arc(bmp.x + 2, bmp.y + 2, BUMPER_R, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fill();
+    // Body
+    const bGrad = ctx.createRadialGradient(bmp.x - 4, bmp.y - 4, 2, bmp.x, bmp.y, BUMPER_R);
+    bGrad.addColorStop(0, '#d4af37');
+    bGrad.addColorStop(0.6, '#b8860b');
+    bGrad.addColorStop(1, '#8b6508');
+    ctx.beginPath();
+    ctx.arc(bmp.x, bmp.y, BUMPER_R, 0, Math.PI*2);
+    ctx.fillStyle = bGrad;
+    ctx.fill();
+    ctx.strokeStyle = '#c9a84c';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Aim line
+  if (selectedBall && aimCurrent && !anyMoving()) {
+    const dx = selectedBall.x - aimCurrent.x;
+    const dy = selectedBall.y - aimCurrent.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len > 5) {
+      const nx = dx/len, ny = dy/len;
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = 'rgba(255,255,200,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(selectedBall.x, selectedBall.y);
+      ctx.lineTo(selectedBall.x + nx*80, selectedBall.y + ny*80);
+      ctx.stroke();
+      // Arrow head
+      ctx.setLineDash([]);
+      const ax = selectedBall.x + nx*80, ay = selectedBall.y + ny*80;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - nx*12 - ny*7, ay - ny*12 + nx*7);
+      ctx.lineTo(ax - nx*12 + ny*7, ay - ny*12 - nx*7);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,255,200,0.8)';
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Balls
+  for (let b of balls) {
+    if (b.pocketed) continue;
+    // Shadow
+    ctx.beginPath();
+    ctx.arc(b.x + 2, b.y + 2, BALL_R, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+    // Ball body
+    const grad = ctx.createRadialGradient(b.x - 3, b.y - 3, 1, b.x, b.y, BALL_R);
+    const baseColor = b.color;
+    grad.addColorStop(0, lighten(baseColor, 60));
+    grad.addColorStop(0.5, baseColor);
+    grad.addColorStop(1, darken(baseColor, 40));
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, BALL_R, 0, Math.PI*2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    // Marked ball indicator
+    if (b.marked) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, BALL_R * 0.45, 0, Math.PI*2);
+      ctx.fillStyle = b.player === 'justin' ? 'rgba(255,255,255,0.7)' : 'rgba(80,80,80,0.7)';
+      ctx.fill();
+    }
+    // Selected highlight
+    if (b === selectedBall) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, BALL_R + 4, 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(255,255,100,0.9)';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+  }
+}
+
+function lighten(hex, amt) {
+  const r = Math.min(255, parseInt(hex.slice(1,3),16)+amt);
+  const g = Math.min(255, parseInt(hex.slice(3,5),16)+amt);
+  const b = Math.min(255, parseInt(hex.slice(5,7),16)+amt);
+  return `rgb(${r},${g},${b})`;
+}
+function darken(hex, amt) {
+  const r = Math.max(0, parseInt(hex.slice(1,3),16)-amt);
+  const g = Math.max(0, parseInt(hex.slice(3,5),16)-amt);
+  const b = Math.max(0, parseInt(hex.slice(5,7),16)-amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+let lastMoving = false;
+function loop() {
+  if (gameOver) { draw(); return; }
+  physics();
+  draw();
+  const moving = anyMoving();
+  // When balls stop moving, check for pockets and turn change
+  if (lastMoving && !moving) {
+    checkWin();
+    if (!gameOver) {
+      if (!pocketedThisTurn) {
+        currentPlayer = currentPlayer === 'justin' ? 'morpheus' : 'justin';
+      }
+      pocketedThisTurn = false;
+      shooting = false;
+      selectedBall = null;
+      updateScoreboard();
+    }
+  }
+  lastMoving = moving;
+  animFrame = requestAnimationFrame(loop);
+}
+
+function getPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: (clientX - rect.left) / scale,
+    y: (clientY - rect.top) / scale
+  };
+}
+
+function onDown(e) {
+  e.preventDefault();
+  if (gameOver || anyMoving() || shooting) return;
+  const pos = getPos(e);
+  // Find ball belonging to current player
+  for (let b of balls) {
+    if (b.pocketed || b.player !== currentPlayer) continue;
+    const dx = pos.x - b.x, dy = pos.y - b.y;
+    if (Math.sqrt(dx*dx + dy*dy) < BALL_R + 8) {
+      selectedBall = b;
+      aimStart = pos;
+      aimCurrent = pos;
+      return;
+    }
+  }
+}
+
+function onMove(e) {
+  e.preventDefault();
+  if (!selectedBall) return;
+  aimCurrent = getPos(e);
+}
+
+function onUp(e) {
+  e.preventDefault();
+  if (!selectedBall || !aimStart || !aimCurrent) return;
+  const dx = selectedBall.x - aimCurrent.x;
+  const dy = selectedBall.y - aimCurrent.y;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  if (len > 8) {
+    const MAX_POWER = 18;
+    const power = Math.min(len / 15, MAX_POWER);
+    selectedBall.vx = (dx / len) * power;
+    selectedBall.vy = (dy / len) * power;
+    shooting = true;
+    pocketedThisTurn = false;
+  }
+  aimStart = null;
+  aimCurrent = null;
+  if (!shooting) selectedBall = null;
+}
+
+canvas.addEventListener('mousedown', onDown);
+canvas.addEventListener('mousemove', onMove);
+canvas.addEventListener('mouseup', onUp);
+canvas.addEventListener('touchstart', onDown, { passive: false });
+canvas.addEventListener('touchmove', onMove, { passive: false });
+canvas.addEventListener('touchend', onUp, { passive: false });
+
+initGame();
+</script>
+</body>
+</html>
